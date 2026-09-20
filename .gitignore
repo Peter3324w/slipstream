@@ -1,0 +1,28 @@
+# secrets — never commit a Twitch client id, token or device code
+.env
+.env.*
+!.env.example
+*.token
+secrets.json
+
+# dependencies / build
+node_modules/
+dist/
+build/
+out/
+release/
+*.tsbuildinfo
+
+# streamlink/mpv runtime artefacts
+cache/
+*.ts
+*.mp4
+*.mkv
+mpv-cache*
+*.log
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
