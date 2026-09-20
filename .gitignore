@@ -15,7 +15,7 @@ release/
 
 # streamlink/mpv runtime artefacts
 cache/
-*.ts
+recordings/
 *.mp4
 *.mkv
 mpv-cache*

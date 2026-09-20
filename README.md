@@ -1,4 +1,4 @@
-# twitch-lite
+# Slipstream
 
 A lightweight desktop Twitch client. Video and chat in one window, without the web app's overhead.
 
