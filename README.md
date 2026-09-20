@@ -239,7 +239,9 @@ Chatterino + streamlink *is* the lightweight Twitch setup people already run. **
 1. Path A or Path B — does `<video>` playback come close enough on RAM to be worth avoiding mpv embedding?
 2. How badly does `--wid` embedding constrain overlays in practice?
 3. Does `--cache-on-disk` hold up over a multi-hour session, or does the cache file grow unbounded?
-4. Does seeking forward past a stitched mid-roll actually work, or does the demuxer stall at the ad boundary?
+4. Does seeking forward past a stitched mid-roll actually work, or does the demuxer stall at
+   the ad boundary? **The whole ad strategy rests on this.** Instrumented in [`probe/`](probe/)
+   — run that before writing any application code.
 5. Electron (known, PlayTime patterns reusable) or Tauri (WebView2, far smaller footprint, Rust backend)? Electron ships faster; Tauri better serves the stated goal.
 
 ---
