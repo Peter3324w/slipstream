@@ -1,6 +1,8 @@
 import type { RefObject } from 'react'
 import type { ChatState } from '@/chat/irc'
+import type { EmoteProvider } from '@shared/types'
 import { Power } from './Icons'
+import { EmoteMenu, data } from './EmoteMenu'
 
 interface Props {
   logRef: RefObject<HTMLDivElement | null>
@@ -13,10 +15,10 @@ interface Props {
   bytes: number
   onClose: () => void
   onConnect: () => void
-  emotesOn: boolean
+  emoteProviders: EmoteProvider[]
+  emoteCounts: Record<EmoteProvider, number>
   emoteBytes: number
-  emoteCount: number
-  onToggleEmotes: () => void
+  onToggleProvider: (provider: EmoteProvider) => void
 }
 
 const LABEL: Record<ChatState, string> = {
@@ -26,11 +28,6 @@ const LABEL: Record<ChatState, string> = {
   closed: 'offline'
 }
 
-function data(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
 
 export function ChatPane(props: Props): React.JSX.Element {
   return (
@@ -44,22 +41,12 @@ export function ChatPane(props: Props): React.JSX.Element {
           </span>
         )}
 
-        <button
-          className={`chat-7tv ${props.emotesOn ? 'is-on' : ''}`}
-          onClick={props.onToggleEmotes}
-          title={
-            props.emotesOn
-              ? `7TV emotes on${props.emoteCount ? ` - ${props.emoteCount} available` : ''}` +
-                `${props.emoteBytes ? `, ${data(props.emoteBytes)} downloaded` : ''}.` +
-                ' Turn off to stop downloading emote images.'
-              : '7TV emotes off - emote names render as plain text and nothing is downloaded.'
-          }
-        >
-          7TV
-          {props.emotesOn && props.emoteBytes > 0 && (
-            <span className="chat-7tv-data">{data(props.emoteBytes)}</span>
-          )}
-        </button>
+        <EmoteMenu
+          enabled={props.emoteProviders}
+          counts={props.emoteCounts}
+          bytes={props.emoteBytes}
+          onToggle={props.onToggleProvider}
+        />
 
         <span className={`chat-state is-${props.closed ? 'idle' : props.state}`}>
           {props.closed ? 'closed' : LABEL[props.state]}

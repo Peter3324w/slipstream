@@ -1,7 +1,8 @@
 import { app, shell, BrowserWindow, Menu, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { AppInfo, EmoteSet, MemorySample, ResolveResult } from '@shared/types'
+import type { AppInfo, EmoteProvider, EmoteSet, MemorySample, ResolveResult } from '@shared/types'
+import { EMOTE_PROVIDERS } from '@shared/types'
 import { resolveChannel, streamlinkVersion } from './streamlink'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
 
@@ -71,7 +72,7 @@ function applyCsp(): void {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app",
+    "img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app https://cdn.betterttv.net https://cdn.frankerfacez.com",
     "media-src 'self' blob:",
     "connect-src 'self' blob: https://*.ttvnw.net wss://irc-ws.chat.twitch.tv",
     "object-src 'none'",
@@ -92,16 +93,26 @@ function registerIpc(): void {
     return resolveChannel(channel)
   })
 
-  ipcMain.handle('emotes:fetch', async (_e, channel: unknown): Promise<EmoteSet> => {
-    if (typeof channel !== 'string')
-      return { emotes: {}, globalCount: 0, channelCount: 0, errors: ['bad channel'] }
-    try {
-      return await fetchEmotes(channel)
-    } catch (err) {
-      // Emotes are a nicety; chat must keep working without them.
-      return { emotes: {}, globalCount: 0, channelCount: 0, errors: [(err as Error).message] }
+  ipcMain.handle(
+    'emotes:fetch',
+    async (_e, channel: unknown, providers: unknown): Promise<EmoteSet> => {
+      const empty: EmoteSet = { emotes: {}, counts: { '7tv': 0, bttv: 0, ffz: 0 }, errors: [] }
+      if (typeof channel !== 'string') return { ...empty, errors: ['bad channel'] }
+
+      // Never trust the renderer's list; take only names we know.
+      const wanted = Array.isArray(providers)
+        ? EMOTE_PROVIDERS.filter((p) => providers.includes(p))
+        : EMOTE_PROVIDERS
+      if (!wanted.length) return empty
+
+      try {
+        return await fetchEmotes(channel, wanted as EmoteProvider[])
+      } catch (err) {
+        // Emotes are a nicety; chat must keep working without them.
+        return { ...empty, errors: [(err as Error).message] }
+      }
     }
-  })
+  )
 
   ipcMain.handle('app:info', async (): Promise<AppInfo> => ({
     version: app.getVersion(),

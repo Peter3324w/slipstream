@@ -54,22 +54,27 @@ export interface MemorySample {
   bytes: number
 }
 
+export type EmoteProvider = '7tv' | 'bttv' | 'ffz'
+
+export const EMOTE_PROVIDERS: EmoteProvider[] = ['7tv', 'bttv', 'ffz']
+
 /** One third-party emote, trimmed to what it takes to draw it. */
 export interface Emote {
   name: string
-  /** Extensionless: the renderer appends .avif or .webp once it knows which it can decode. */
+  provider: EmoteProvider
+  /** Ready to use. Format already chosen per provider - see emotes.ts. */
   url: string
+  /** Tried first where it is smaller; falls back to `url` on a decode error. */
+  altUrl?: string
   animated: boolean
+  /** 0 when the provider does not report it (BTTV). */
   width: number
   height: number
-  hasAvif: boolean
-  hasWebp: boolean
 }
 
 export interface EmoteSet {
   emotes: Record<string, Emote>
-  globalCount: number
-  channelCount: number
-  /** Non-fatal problems worth surfacing, e.g. 7TV unreachable. */
+  counts: Record<EmoteProvider, number>
+  /** Non-fatal problems worth surfacing, e.g. a provider being unreachable. */
   errors: string[]
 }

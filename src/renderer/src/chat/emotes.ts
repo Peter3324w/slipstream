@@ -2,36 +2,44 @@ import type { Emote } from '@shared/types'
 
 export type EmoteTable = Record<string, Emote>
 
+const EMOTE_HOSTS = [
+  'https://cdn.7tv.app/',
+  'https://cdn.betterttv.net/',
+  'https://cdn.frankerfacez.com/'
+]
+
 /**
  * One emote image.
  *
- * AVIF first: measured on a real 7TV emote, the 1x AVIF is 28KB against 72KB for
- * the same thing as WebP, and this feature exists for people on a bad line. There
- * is no capability check because a per-image fallback is both simpler and more
- * honest than guessing - if the decoder refuses it, we swap to WebP and move on.
- *
- * 1x only. 2x is roughly three times the bytes for something drawn at 26px.
+ * The format is already decided per provider in main/emotes.ts, on measurements
+ * rather than a house style: 7TV serves AVIF at a third of its WebP, while BTTV
+ * animated emotes are about 3x smaller as GIF than the WebP its content
+ * negotiation would otherwise hand an <img>. `altUrl` is a per-image fallback
+ * for a decoder that refuses the first choice - simpler than a capability probe,
+ * and it cannot be wrong.
  */
 export function emoteImg(emote: Emote): HTMLImageElement {
   const img = document.createElement('img')
   img.className = 'emote emote-3p'
   img.alt = emote.name
-  img.title = emote.name
+  img.title = `${emote.name}  (${emote.provider.toUpperCase()})`
   img.loading = 'lazy'
   img.decoding = 'async'
-  // Intrinsic size up front, so a slow emote does not shove the line around.
-  img.width = emote.width
-  img.height = emote.height
 
-  if (emote.hasAvif) {
-    img.src = `${emote.url}.avif`
+  // Intrinsic size up front, so a slow emote does not shove the line around.
+  // BTTV reports none, so those are left to CSS.
+  if (emote.width && emote.height) {
+    img.width = emote.width
+    img.height = emote.height
+  }
+
+  img.src = emote.url
+  if (emote.altUrl) {
     const fallback = (): void => {
       img.removeEventListener('error', fallback)
-      if (emote.hasWebp) img.src = `${emote.url}.webp`
+      img.src = emote.altUrl as string
     }
     img.addEventListener('error', fallback)
-  } else {
-    img.src = `${emote.url}.webp`
   }
   return img
 }
@@ -52,7 +60,7 @@ export class EmoteTraffic {
     this.observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         const r = entry as PerformanceResourceTiming
-        if (r.name.startsWith('https://cdn.7tv.app/')) this.bytes += r.transferSize || 0
+        if (EMOTE_HOSTS.some((h) => r.name.startsWith(h))) this.bytes += r.transferSize || 0
       }
     })
     this.observer.observe({ type: 'resource', buffered: true })

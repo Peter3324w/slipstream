@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ResolveFailure, ResolveResult, ResolvedStream } from '@shared/types'
+import type { EmoteProvider, ResolveFailure, ResolveResult, ResolvedStream } from '@shared/types'
+import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { TwitchChat, type ChatState } from './chat/irc'
@@ -99,25 +100,61 @@ export default function App(): React.JSX.Element {
   const [chatBytes, setChatBytes] = useState(0)
 
   /**
-   * Third-party emotes. On by default, but a switch rather than a fixture:
-   * a channel's index alone is ~290KB compressed, and the images on top of that
-   * are what makes chat unwatchable on a poor connection.
+   * Third-party emotes, per provider. All on by default, but individually
+   * switchable: 7TV is ~1000 emotes behind a 290KB index while BTTV and FFZ
+   * together are a couple of hundred and cost almost nothing, so on a poor
+   * connection which ones you keep is a real choice.
    */
-  const [emotesOn, setEmotesOn] = useState(() => localStorage.getItem(EMOTES_KEY) !== '0')
-  const emotesOnRef = useRef(emotesOn)
+  const [emoteProviders, setEmoteProviders] = useState<EmoteProvider[]>(() => {
+    const stored = localStorage.getItem(EMOTES_KEY)
+    if (stored === null) return EMOTE_PROVIDERS
+    // An empty string is "none", which is different from never having chosen.
+    return EMOTE_PROVIDERS.filter((p) => stored.split(',').includes(p))
+  })
+  const emoteProvidersRef = useRef<EmoteProvider[]>(emoteProviders)
   const [emoteBytes, setEmoteBytes] = useState(0)
-  const [emoteCount, setEmoteCount] = useState(0)
+  const [emoteCounts, setEmoteCounts] = useState<Record<EmoteProvider, number>>({
+    '7tv': 0,
+    bttv: 0,
+    ffz: 0
+  })
   const trafficRef = useRef<EmoteTraffic | null>(null)
   const [hudVisible, setHudVisible] = useState(false)
 
   const loadEmotes = useCallback(async (login: string): Promise<void> => {
-    if (!emotesOnRef.current || !bridgeReady()) return
-    const set = await window.slipstream.fetchEmotes(login)
-    if (loginRef.current !== login || !emotesOnRef.current) return
+    const wanted = emoteProvidersRef.current
+    if (!wanted.length || !bridgeReady()) {
+      if (listRef.current) listRef.current.emotes = null
+      setEmoteCounts({ '7tv': 0, bttv: 0, ffz: 0 })
+      return
+    }
+
+    const set = await window.slipstream.fetchEmotes(login, wanted)
+    // Both can change while a thousand emotes are being fetched.
+    if (loginRef.current !== login || emoteProvidersRef.current !== wanted) return
+
     if (listRef.current) listRef.current.emotes = set.emotes
-    setEmoteCount(set.globalCount + set.channelCount)
-    if (set.errors.length) listRef.current?.system(`7TV: ${set.errors.join('; ')}`)
+    setEmoteCounts(set.counts)
+    if (set.errors.length) listRef.current?.system(`Emotes: ${set.errors.join('; ')}`)
   }, [])
+
+  const toggleProvider = useCallback(
+    (provider: EmoteProvider): void => {
+      const current = emoteProvidersRef.current
+      const next = current.includes(provider)
+        ? current.filter((p) => p !== provider)
+        : EMOTE_PROVIDERS.filter((p) => p === provider || current.includes(p))
+
+      emoteProvidersRef.current = next
+      setEmoteProviders(next)
+      localStorage.setItem(EMOTES_KEY, next.join(','))
+
+      const login = loginRef.current
+      if (login) void loadEmotes(login)
+      else if (listRef.current) listRef.current.emotes = null
+    },
+    [loadEmotes]
+  )
 
   const start = useCallback(async (raw: string): Promise<void> => {
     const login = parseChannelInput(raw)
@@ -176,23 +213,6 @@ export default function App(): React.JSX.Element {
       chatRef.current?.connect(login)
       void loadEmotes(login)
     }
-  }, [loadEmotes])
-
-  const toggleEmotes = useCallback((): void => {
-    const next = !emotesOnRef.current
-    emotesOnRef.current = next
-    setEmotesOn(next)
-    localStorage.setItem(EMOTES_KEY, next ? '1' : '0')
-
-    if (!next) {
-      // Messages already on screen keep the images they downloaded; there is
-      // nothing to reclaim by tearing them out. New ones render as plain text.
-      if (listRef.current) listRef.current.emotes = null
-      setEmoteCount(0)
-      return
-    }
-    const login = loginRef.current
-    if (login) void loadEmotes(login)
   }, [loadEmotes])
 
   const closeChat = useCallback((): void => {
@@ -573,10 +593,10 @@ export default function App(): React.JSX.Element {
         bytes={chatBytes}
         onClose={closeChat}
         onConnect={openChat}
-        emotesOn={emotesOn}
+        emoteProviders={emoteProviders}
+        emoteCounts={emoteCounts}
         emoteBytes={emoteBytes}
-        emoteCount={emoteCount}
-        onToggleEmotes={toggleEmotes}
+        onToggleProvider={toggleProvider}
       />
     </div>
   )

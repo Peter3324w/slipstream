@@ -546,3 +546,21 @@ input { font: inherit; color: inherit; }
   width: auto;
   vertical-align: -8px;
 }
+
+/* The quality menu opens upward from the control bar; the emote menu hangs
+   below the chat header, so it needs the opposite anchoring. */
+.menu.menu-down {
+  bottom: auto;
+  top: calc(100% + 8px);
+  animation: drop 0.14s var(--ease);
+}
+@keyframes drop { from { opacity: 0; transform: translateY(-5px); } }
+
+.menu-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 9px 2px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
