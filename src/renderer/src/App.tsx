@@ -7,7 +7,7 @@ import { ChatList } from './chat/messageList'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
 import { MemoryHud } from './components/MemoryHud'
-import { ChatBubble, Gauge } from './components/Icons'
+import { ChatBubble, ChatOff, Gauge } from './components/Icons'
 import { Placeholder } from './components/Placeholder'
 
 type Phase =
@@ -18,6 +18,7 @@ type Phase =
 
 const VOLUME_KEY = 'slipstream.volume'
 const QUALITY_KEY = 'slipstream.quality'
+const CHAT_CLOSED_KEY = 'slipstream.chatClosed'
 
 /**
  * Main's own caps add up to about 53s (30s streamlink + 15s manifest + 8s liveness),
@@ -85,6 +86,15 @@ export default function App(): React.JSX.Element {
   const [chatState, setChatState] = useState<ChatState>('idle')
   const [showJump, setShowJump] = useState(false)
   const [chatVisible, setChatVisible] = useState(true)
+  /**
+   * Closed is not hidden. Hidden keeps the socket up, so the log stays current
+   * and you pay for it the whole time. Closed drops the connection and frees the
+   * message nodes; coming back costs a reconnect and starts from nothing.
+   * Persisted, because closing it is a deliberate choice about data.
+   */
+  const [chatClosed, setChatClosed] = useState(() => localStorage.getItem(CHAT_CLOSED_KEY) === '1')
+  const chatClosedRef = useRef(chatClosed)
+  const [chatBytes, setChatBytes] = useState(0)
   const [hudVisible, setHudVisible] = useState(false)
 
   const start = useCallback(async (raw: string): Promise<void> => {
@@ -139,9 +149,42 @@ export default function App(): React.JSX.Element {
     setPhase({ kind: 'playing', stream: result.stream })
     playerRef.current?.load(result.stream.masterPlaylist)
     listRef.current?.clear()
-    listRef.current?.system(`Joining #${login}...`)
-    chatRef.current?.connect(login)
+    if (!chatClosedRef.current) {
+      listRef.current?.system(`Joining #${login}...`)
+      chatRef.current?.connect(login)
+    }
   }, [])
+
+  const closeChat = useCallback((): void => {
+    chatClosedRef.current = true
+    setChatClosed(true)
+    setChatBytes(0)
+    localStorage.setItem(CHAT_CLOSED_KEY, '1')
+    chatRef.current?.disconnect()
+    // Drop the message nodes too - a closed chat should not still be holding
+    // 250 elements and their emote images.
+    listRef.current?.clear()
+    setChatState('idle')
+  }, [])
+
+  const openChat = useCallback((): void => {
+    chatClosedRef.current = false
+    setChatClosed(false)
+    setChatVisible(true)
+    localStorage.removeItem(CHAT_CLOSED_KEY)
+    const login = loginRef.current
+    if (login) {
+      listRef.current?.clear()
+      listRef.current?.system(`Joining #${login}...`)
+      chatRef.current?.connect(login)
+    }
+  }, [])
+
+  /**
+   * Show/hide only, in every state. Reconnecting is deliberately NOT on this
+   * button: it costs data, so it lives behind Connect in the panel itself.
+   */
+  const toggleChat = useCallback((): void => setChatVisible((v) => !v), [])
 
   const cancel = useCallback((): void => {
     // Clearing the ref makes any in-flight resolve discard itself on return.
@@ -262,6 +305,12 @@ export default function App(): React.JSX.Element {
     pinnedRef.current = pinnedLabel
   }, [pinnedLabel])
 
+  useEffect(() => {
+    if (chatClosed) return
+    const id = setInterval(() => setChatBytes(chatRef.current?.bytesReceived ?? 0), 1000)
+    return () => clearInterval(id)
+  }, [chatClosed])
+
   /**
    * Keep titlebar content clear of the native minimise/maximise/close buttons.
    *
@@ -334,7 +383,7 @@ export default function App(): React.JSX.Element {
           setMuted((v) => !v)
           break
         case 'c':
-          setChatVisible((v) => !v)
+          toggleChat()
           break
         case 'f2':
           setHudVisible((v) => !v)
@@ -343,7 +392,7 @@ export default function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [seek, togglePlay])
+  }, [seek, togglePlay, toggleChat])
 
   // --------------------------------------------------------------- view
 
@@ -397,12 +446,19 @@ export default function App(): React.JSX.Element {
             <Gauge />
           </button>
           <button
-            className={`ctl ${chatVisible ? 'is-on' : 'is-off'}`}
-            onClick={() => setChatVisible((v) => !v)}
-            title={chatVisible ? 'Hide chat  (C)' : 'Show chat  (C)'}
+            className={`ctl ${chatClosed ? 'is-closed' : chatVisible ? 'is-on' : 'is-off'}`}
+            onClick={toggleChat}
+            title={
+              chatClosed
+                ? 'Chat is closed - connect  (C)'
+                : chatVisible
+                  ? 'Hide chat, stays connected  (C)'
+                  : 'Show chat  (C)'
+            }
           >
-            <ChatBubble />
-            {!chatVisible && <span style={{ fontSize: 11 }}>chat</span>}
+            {chatClosed ? <ChatOff /> : <ChatBubble />}
+            {chatClosed && <span style={{ fontSize: 11 }}>off</span>}
+            {!chatClosed && !chatVisible && <span style={{ fontSize: 11 }}>chat</span>}
           </button>
         </div>
       </header>
@@ -464,6 +520,10 @@ export default function App(): React.JSX.Element {
         channel={channel}
         showJump={showJump}
         onJump={() => listRef.current?.jumpToLatest()}
+        closed={chatClosed}
+        bytes={chatBytes}
+        onClose={closeChat}
+        onConnect={openChat}
       />
     </div>
   )

@@ -463,3 +463,43 @@ input { font: inherit; color: inherit; }
 
 .dvr.is-disabled { opacity: 0.4; }
 .dvr.is-disabled .dvr-track { cursor: default; }
+
+/* ----------------------------------------------- chat: closed vs hidden */
+
+.chat-data {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-faint);
+  transition: background 0.15s, color 0.15s;
+}
+.chat-close:hover { background: rgba(240, 85, 106, 0.14); color: var(--live); }
+
+.chat-closed {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 22px;
+  text-align: center;
+  background: var(--surface);
+}
+.chat-closed p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-faint); }
+.chat-closed-title { font-size: 13px !important; font-weight: 600; color: var(--text-dim) !important; }
+.chat-closed .btn { margin-top: 2px; }
+
+/* Closed reads differently from merely hidden: one costs nothing, one is live. */
+.ctl.is-closed { color: var(--text-faint); opacity: 0.75; }
+.ctl.is-closed:hover { color: var(--text); opacity: 1; }

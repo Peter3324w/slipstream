@@ -27,6 +27,9 @@ export interface ChatHandlers {
 
 const ENDPOINT = 'wss://irc-ws.chat.twitch.tv:443'
 
+/** Shared, because allocating one per frame at 20 messages a second is silly. */
+const ENCODER = new TextEncoder()
+
 /** IRCv3 tag escaping, per the spec Twitch follows. */
 function unescapeTag(v: string): string {
   return v.replace(/\\(.)/g, (_, c: string) =>
@@ -127,6 +130,9 @@ export class TwitchChat {
   private ws: WebSocket | null = null
   private channel: string | null = null
   private retries = 0
+  /** Payload bytes off the socket since the last connect. Makes the cost of
+   *  leaving chat running visible, which is the point of being able to close it. */
+  private bytes = 0
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private closedByUs = false
 
@@ -136,7 +142,17 @@ export class TwitchChat {
     this.disconnect()
     this.channel = channel.toLowerCase()
     this.closedByUs = false
+    this.bytes = 0
     this.open()
+  }
+
+  /** Approximate: payload only, excluding TLS and WebSocket framing overhead. */
+  get bytesReceived(): number {
+    return this.bytes
+  }
+
+  get isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN
   }
 
   private open(): void {
@@ -158,7 +174,9 @@ export class TwitchChat {
     }
 
     ws.onmessage = (ev) => {
-      for (const raw of String(ev.data).split('\r\n')) {
+      const frame = String(ev.data)
+      this.bytes += ENCODER.encode(frame).length
+      for (const raw of frame.split('\r\n')) {
         if (raw) this.handleLine(raw)
       }
     }

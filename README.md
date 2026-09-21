@@ -166,6 +166,11 @@ Detect ad boundaries via the HLS `#EXT-X-DATERANGE` tag carrying `CLASS="twitch-
 - [x] First-party emotes — the IRC `emotes` tag carries id and range, so this came almost free
 - [x] Per-process memory readout in-app (`F2`), because one summary number is exactly what hid the
       problem in the browser
+- [x] **Close vs hide chat.** Hiding takes it off screen; the socket stays up, so the log is
+      current when it comes back and you pay for it the whole time. Closing drops the connection
+      and frees the message nodes. The header shows bytes received, so the difference is a number
+      rather than a claim. Closed is remembered across restarts, because it is a choice about data
+      — and reconnecting starts from an empty log, since Twitch sends no backlog
 - [ ] **Run it against a long live session and write the number down**
 
 Still deliberately no login and no third-party emotes. v1 exists to answer one question: does this

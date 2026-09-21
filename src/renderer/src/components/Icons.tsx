@@ -81,3 +81,17 @@ export const Alert = ({ size = 22 }: P): React.JSX.Element => (
     <path d="M12 7.5v5.5M12 16.3v.2" />
   </svg>
 )
+
+export const ChatOff = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z" />
+    <path d="M3.5 3.5l17 17" />
+  </svg>
+)
+
+export const Power = ({ size = 14 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M12 4.5v7" />
+    <path d="M7.5 7a6.5 6.5 0 1 0 9 0" />
+  </svg>
+)
