@@ -1,8 +1,9 @@
 import { app, shell, BrowserWindow, Menu, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { AppInfo, MemorySample, ResolveResult } from '@shared/types'
+import type { AppInfo, EmoteSet, MemorySample, ResolveResult } from '@shared/types'
 import { resolveChannel, streamlinkVersion } from './streamlink'
+import { fetchEmotes, setEmoteCacheDir } from './emotes'
 
 const __dirname_ = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
@@ -70,7 +71,7 @@ function applyCsp(): void {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://static-cdn.jtvnw.net",
+    "img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app",
     "media-src 'self' blob:",
     "connect-src 'self' blob: https://*.ttvnw.net wss://irc-ws.chat.twitch.tv",
     "object-src 'none'",
@@ -89,6 +90,17 @@ function registerIpc(): void {
     if (typeof channel !== 'string')
       return { ok: false, reason: 'invalid_channel', message: 'Expected a channel name.' }
     return resolveChannel(channel)
+  })
+
+  ipcMain.handle('emotes:fetch', async (_e, channel: unknown): Promise<EmoteSet> => {
+    if (typeof channel !== 'string')
+      return { emotes: {}, globalCount: 0, channelCount: 0, errors: ['bad channel'] }
+    try {
+      return await fetchEmotes(channel)
+    } catch (err) {
+      // Emotes are a nicety; chat must keep working without them.
+      return { emotes: {}, globalCount: 0, channelCount: 0, errors: [(err as Error).message] }
+    }
   })
 
   ipcMain.handle('app:info', async (): Promise<AppInfo> => ({
@@ -125,6 +137,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
+    setEmoteCacheDir(app.getPath('userData'))
     applyCsp()
     registerIpc()
     createWindow()

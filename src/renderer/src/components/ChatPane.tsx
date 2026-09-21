@@ -13,6 +13,10 @@ interface Props {
   bytes: number
   onClose: () => void
   onConnect: () => void
+  emotesOn: boolean
+  emoteBytes: number
+  emoteCount: number
+  onToggleEmotes: () => void
 }
 
 const LABEL: Record<ChatState, string> = {
@@ -39,6 +43,23 @@ export function ChatPane(props: Props): React.JSX.Element {
             {data(props.bytes)}
           </span>
         )}
+
+        <button
+          className={`chat-7tv ${props.emotesOn ? 'is-on' : ''}`}
+          onClick={props.onToggleEmotes}
+          title={
+            props.emotesOn
+              ? `7TV emotes on${props.emoteCount ? ` - ${props.emoteCount} available` : ''}` +
+                `${props.emoteBytes ? `, ${data(props.emoteBytes)} downloaded` : ''}.` +
+                ' Turn off to stop downloading emote images.'
+              : '7TV emotes off - emote names render as plain text and nothing is downloaded.'
+          }
+        >
+          7TV
+          {props.emotesOn && props.emoteBytes > 0 && (
+            <span className="chat-7tv-data">{data(props.emoteBytes)}</span>
+          )}
+        </button>
 
         <span className={`chat-state is-${props.closed ? 'idle' : props.state}`}>
           {props.closed ? 'closed' : LABEL[props.state]}

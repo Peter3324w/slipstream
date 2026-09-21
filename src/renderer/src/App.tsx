@@ -4,6 +4,7 @@ import { parseChannelInput } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
+import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
 import { MemoryHud } from './components/MemoryHud'
@@ -19,6 +20,7 @@ type Phase =
 const VOLUME_KEY = 'slipstream.volume'
 const QUALITY_KEY = 'slipstream.quality'
 const CHAT_CLOSED_KEY = 'slipstream.chatClosed'
+const EMOTES_KEY = 'slipstream.emotes'
 
 /**
  * Main's own caps add up to about 53s (30s streamlink + 15s manifest + 8s liveness),
@@ -95,7 +97,27 @@ export default function App(): React.JSX.Element {
   const [chatClosed, setChatClosed] = useState(() => localStorage.getItem(CHAT_CLOSED_KEY) === '1')
   const chatClosedRef = useRef(chatClosed)
   const [chatBytes, setChatBytes] = useState(0)
+
+  /**
+   * Third-party emotes. On by default, but a switch rather than a fixture:
+   * a channel's index alone is ~290KB compressed, and the images on top of that
+   * are what makes chat unwatchable on a poor connection.
+   */
+  const [emotesOn, setEmotesOn] = useState(() => localStorage.getItem(EMOTES_KEY) !== '0')
+  const emotesOnRef = useRef(emotesOn)
+  const [emoteBytes, setEmoteBytes] = useState(0)
+  const [emoteCount, setEmoteCount] = useState(0)
+  const trafficRef = useRef<EmoteTraffic | null>(null)
   const [hudVisible, setHudVisible] = useState(false)
+
+  const loadEmotes = useCallback(async (login: string): Promise<void> => {
+    if (!emotesOnRef.current || !bridgeReady()) return
+    const set = await window.slipstream.fetchEmotes(login)
+    if (loginRef.current !== login || !emotesOnRef.current) return
+    if (listRef.current) listRef.current.emotes = set.emotes
+    setEmoteCount(set.globalCount + set.channelCount)
+    if (set.errors.length) listRef.current?.system(`7TV: ${set.errors.join('; ')}`)
+  }, [])
 
   const start = useCallback(async (raw: string): Promise<void> => {
     const login = parseChannelInput(raw)
@@ -152,8 +174,26 @@ export default function App(): React.JSX.Element {
     if (!chatClosedRef.current) {
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login)
+      void loadEmotes(login)
     }
-  }, [])
+  }, [loadEmotes])
+
+  const toggleEmotes = useCallback((): void => {
+    const next = !emotesOnRef.current
+    emotesOnRef.current = next
+    setEmotesOn(next)
+    localStorage.setItem(EMOTES_KEY, next ? '1' : '0')
+
+    if (!next) {
+      // Messages already on screen keep the images they downloaded; there is
+      // nothing to reclaim by tearing them out. New ones render as plain text.
+      if (listRef.current) listRef.current.emotes = null
+      setEmoteCount(0)
+      return
+    }
+    const login = loginRef.current
+    if (login) void loadEmotes(login)
+  }, [loadEmotes])
 
   const closeChat = useCallback((): void => {
     chatClosedRef.current = true
@@ -177,8 +217,9 @@ export default function App(): React.JSX.Element {
       listRef.current?.clear()
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login)
+      void loadEmotes(login)
     }
-  }, [])
+  }, [loadEmotes])
 
   /**
    * Show/hide only, in every state. Reconnecting is deliberately NOT on this
@@ -250,7 +291,12 @@ export default function App(): React.JSX.Element {
     })
     playerRef.current = player
 
+    const traffic = new EmoteTraffic()
+    traffic.start()
+    trafficRef.current = traffic
+
     return () => {
+      traffic.stop()
       player.destroy()
       chat.disconnect()
       list.destroy()
@@ -307,7 +353,10 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     if (chatClosed) return
-    const id = setInterval(() => setChatBytes(chatRef.current?.bytesReceived ?? 0), 1000)
+    const id = setInterval(() => {
+      setChatBytes(chatRef.current?.bytesReceived ?? 0)
+      setEmoteBytes(trafficRef.current?.total ?? 0)
+    }, 1000)
     return () => clearInterval(id)
   }, [chatClosed])
 
@@ -524,6 +573,10 @@ export default function App(): React.JSX.Element {
         bytes={chatBytes}
         onClose={closeChat}
         onConnect={openChat}
+        emotesOn={emotesOn}
+        emoteBytes={emoteBytes}
+        emoteCount={emoteCount}
+        onToggleEmotes={toggleEmotes}
       />
     </div>
   )

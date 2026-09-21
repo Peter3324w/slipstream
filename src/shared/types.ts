@@ -53,3 +53,23 @@ export interface MemorySample {
   /** Resident set size in bytes. */
   bytes: number
 }
+
+/** One third-party emote, trimmed to what it takes to draw it. */
+export interface Emote {
+  name: string
+  /** Extensionless: the renderer appends .avif or .webp once it knows which it can decode. */
+  url: string
+  animated: boolean
+  width: number
+  height: number
+  hasAvif: boolean
+  hasWebp: boolean
+}
+
+export interface EmoteSet {
+  emotes: Record<string, Emote>
+  globalCount: number
+  channelCount: number
+  /** Non-fatal problems worth surfacing, e.g. 7TV unreachable. */
+  errors: string[]
+}

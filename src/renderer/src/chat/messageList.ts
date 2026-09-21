@@ -1,4 +1,5 @@
 import { colorFor, type ChatMessage } from './irc'
+import { emoteImg, type EmoteTable } from './emotes'
 
 const EMOTE_CDN = 'https://static-cdn.jtvnw.net/emoticons/v2'
 
@@ -16,6 +17,13 @@ const PIN_SLOP = 48
  * framework in the loop. Appearance is still all CSS, so styling stays editable.
  */
 export class ChatList {
+  /**
+   * Third-party emotes, or null when the viewer has them switched off. Held as a
+   * plain field rather than a constructor argument so the switch takes effect on
+   * the next message without rebuilding the list.
+   */
+  emotes: EmoteTable | null = null
+
   private queue: ChatMessage[] = []
   private frame = 0
   private pinned = true
@@ -93,7 +101,7 @@ export class ChatList {
     let cursor = 0
     for (const e of msg.emotes) {
       if (e.start < cursor || e.end >= cps.length) continue
-      if (e.start > cursor) body.append(cps.slice(cursor, e.start).join(''))
+      if (e.start > cursor) this.appendText(body, cps.slice(cursor, e.start).join(''))
       const img = document.createElement('img')
       img.className = 'emote'
       img.loading = 'lazy'
@@ -104,7 +112,7 @@ export class ChatList {
       body.append(img)
       cursor = e.end + 1
     }
-    if (cursor < cps.length) body.append(cps.slice(cursor).join(''))
+    if (cursor < cps.length) this.appendText(body, cps.slice(cursor).join(''))
 
     el.append(body)
 
@@ -113,6 +121,34 @@ export class ChatList {
     set.add(el)
 
     return el
+  }
+
+  /**
+   * Twitch's own emotes arrive as ranges in the IRC tags; third-party ones are
+   * just words, so whatever is left after those ranges gets tokenised here. The
+   * split keeps its separators, so the original spacing survives.
+   */
+  private appendText(parent: HTMLElement, text: string): void {
+    const table = this.emotes
+    if (!table || !text) {
+      if (text) parent.append(text)
+      return
+    }
+
+    let run = ''
+    for (const token of text.split(/(\s+)/)) {
+      const emote = token ? table[token] : undefined
+      if (emote) {
+        if (run) {
+          parent.append(run)
+          run = ''
+        }
+        parent.append(emoteImg(emote))
+      } else {
+        run += token
+      }
+    }
+    if (run) parent.append(run)
   }
 
   private appendNode(el: HTMLElement): void {

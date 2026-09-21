@@ -181,7 +181,7 @@ actually come in under 300MB?
 - [ ] Twitch login via **Device Code Flow** (`https://id.twitch.tv/oauth2/device`) — public client, no secret, no localhost redirect server. Scopes: `chat:read chat:edit user:read:follows`
 - [ ] Followed-channels list, live status — Helix `/streams/followed`. This is what makes it feel like a client rather than a launcher
 - [ ] Send chat messages
-- [ ] Third-party emotes (see below)
+- [x] Third-party emotes — 7TV done; BTTV and FFZ outstanding
 - [ ] DVR controls: scrub bar, configurable buffer, ad-skip
 
 ### Later
@@ -200,19 +200,60 @@ actually come in under 300MB?
 
 ## Third-party emotes
 
-Not "add the 7TV extension" — implement the APIs directly. Each returns name -> image URL; the chat renderer tokenizes a message and swaps matching words for `<img>`. The on/off toggle is free, because it is our own code.
+Not "add the 7TV extension" — implement the APIs directly. Each returns name -> image URL; the
+chat renderer tokenises a message and swaps matching words for `<img>`. The on/off toggle is free,
+because it is our own code.
+
+**7TV is implemented and verified (2026-09-21).** BTTV and FFZ are the same shape and still to do:
 
 ```
-7TV   https://7tv.io/v3/users/twitch/{twitch_user_id}
-BTTV  https://api.betterttv.net/3/cached/users/twitch/{id}
-FFZ   https://api.frankerfacez.com/v1/room/id/{id}
+7TV globals   https://7tv.io/v3/emote-sets/global
+7TV channel   https://7tv.io/v3/users/twitch/{twitch_user_id}   <- numeric id, not the login
+BTTV          https://api.betterttv.net/3/cached/users/twitch/{id}     (Unverified)
+FFZ           https://api.frankerfacez.com/v1/room/id/{id}             (Unverified)
 ```
 
-*(All three unverified in-session — confirm response shapes before building against them.)*
+The channel endpoint keys on Twitch's **numeric user id**, which `streamlink --json` does not
+return — its `metadata.id` is the *stream* id. The id comes from the same GQL `UseLive` query
+already used to tell a typo from an offline channel.
 
-> **Performance trap.** 7TV emotes are animated WebP. A fast chat rendering hundreds of independently-animating images is *precisely* what made the browser's chat expensive. Cap concurrent animations or render static first frames until hover. Get this wrong and the project rebuilds the problem it exists to escape.
+### What it actually costs
 
----
+This is a switch rather than a fixture because the numbers are not small. Measured against live
+channels:
+
+| | |
+|---|---|
+| Channel emote index, raw JSON | **2.38 MB** |
+| ...as served (zstd) | **287 KB** |
+| Cold fetch | ~5.4 s |
+| From the 24h disk cache | **455 ms** |
+| xQc / Caedrel usable emotes | 1003 / 1041 |
+
+And per emote, for one animated example at 1x:
+
+| format | size |
+|---|---|
+| WebP | 72 KB |
+| **AVIF** | **28 KB** |
+| GIF | 52 KB |
+
+So AVIF is fetched first with a per-image fallback to WebP — no capability probe, because letting
+the decoder answer is simpler and cannot be wrong. **Every emote checked had a 1x AVIF** (1003/1003
+and 1041/1041), so the saving is not incidental. 1x only: 2x is roughly three times the bytes for
+something drawn at 26px.
+
+> **Performance trap.** 7TV emotes are animated WebP. A fast chat rendering hundreds of
+> independently-animating images is *precisely* what made the browser's chat expensive. Mitigated
+> here by 1x AVIF, `loading="lazy"`, and intrinsic `width`/`height` on every element so a slow
+> emote cannot shove the line around. **Not yet mitigated: the number of things animating at once.**
+> Two thirds of a channel's set is animated (680 of 1003 on xQc). Capping concurrent animations,
+> or holding a first frame until hover, is still open.
+
+Turning it off stops all of it — the index is not fetched and emote names render as plain text.
+Messages already on screen keep the images they downloaded; there is nothing to reclaim by
+stripping them out. The chat header shows bytes downloaded, so the cost is a number and not a
+claim, and the setting persists.
 
 ## Dependencies
 

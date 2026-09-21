@@ -503,3 +503,46 @@ input { font: inherit; color: inherit; }
 /* Closed reads differently from merely hidden: one costs nothing, one is live. */
 .ctl.is-closed { color: var(--text-faint); opacity: 0.75; }
 .ctl.is-closed:hover { color: var(--text); opacity: 1; }
+
+/* --------------------------------------------------- third-party emotes */
+
+.chat-7tv {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.chat-7tv:hover { color: var(--text-dim); }
+.chat-7tv.is-on {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-wash);
+}
+.chat-7tv-data {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 10px;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Third-party emotes are taller than Twitch's own and are mostly animated, so
+ * they get their own size. width:auto keeps wide emotes from being squashed -
+ * the intrinsic width/height attributes on the element hold the line steady
+ * until the image lands.
+ */
+.msg img.emote-3p {
+  height: 26px;
+  width: auto;
+  vertical-align: -8px;
+}

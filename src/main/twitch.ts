@@ -19,8 +19,14 @@ const USE_LIVE_HASH = '639d5f11bfb8bf3053b424d9ef650d04c4ebb7d94711d644afb08fe9a
 
 export type Existence = 'live' | 'offline' | 'missing' | 'unknown'
 
+export interface ChannelLookup {
+  state: Existence
+  /** Twitch's numeric user id. Third-party emote services key on this, not the login. */
+  userId: string | null
+}
+
 /** Never throws. 'unknown' means the lookup failed and the caller should not care. */
-export async function channelExistence(login: string): Promise<Existence> {
+export async function lookupChannel(login: string): Promise<ChannelLookup> {
   try {
     const res = await fetch(GQL, {
       method: 'POST',
@@ -32,15 +38,22 @@ export async function channelExistence(login: string): Promise<Existence> {
       }),
       signal: AbortSignal.timeout(8000)
     })
-    if (!res.ok) return 'unknown'
+    if (!res.ok) return { state: 'unknown', userId: null }
 
-    const body = (await res.json()) as { data?: { user?: { stream?: unknown } | null } }
-    if (!('data' in body)) return 'unknown'
+    const body = (await res.json()) as {
+      data?: { user?: { id?: string; stream?: unknown } | null }
+    }
+    if (!('data' in body)) return { state: 'unknown', userId: null }
     const user = body.data?.user
-    if (user === null) return 'missing'
-    if (!user) return 'unknown'
-    return user.stream ? 'live' : 'offline'
+    if (user === null) return { state: 'missing', userId: null }
+    if (!user) return { state: 'unknown', userId: null }
+    return { state: user.stream ? 'live' : 'offline', userId: user.id ?? null }
   } catch {
-    return 'unknown'
+    return { state: 'unknown', userId: null }
   }
+}
+
+/** Convenience for callers that only care whether the channel exists. */
+export async function channelExistence(login: string): Promise<Existence> {
+  return (await lookupChannel(login)).state
 }
