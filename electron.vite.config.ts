@@ -15,7 +15,16 @@ export default defineConfig({
   },
   preload: {
     resolve: { alias: shared },
-    build: { minify: 'esbuild', sourcemap: false },
+    build: {
+      minify: 'esbuild',
+      sourcemap: false,
+      // A sandboxed preload MUST be CommonJS - Electron cannot load an ESM one,
+      // and it fails silently: contextBridge never runs, window.slipstream is
+      // simply undefined, and the first call to it throws in the renderer where
+      // nothing is watching. The .cjs extension is required because package.json
+      // says "type": "module", which would otherwise make a .js file ESM again.
+      rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } }
+    },
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ResolveFailure, ResolvedStream } from '@shared/types'
+import type { ResolveFailure, ResolveResult, ResolvedStream } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { TwitchChat, type ChatState } from './chat/irc'
@@ -16,6 +16,40 @@ type Phase =
   | { kind: 'error'; reason: ResolveFailure; message: string }
 
 const VOLUME_KEY = 'slipstream.volume'
+
+/**
+ * Main's own caps add up to about 53s (30s streamlink + 15s manifest + 8s liveness),
+ * so this only fires when main is genuinely stuck rather than merely slow. It exists
+ * because the alternative failure mode is a spinner that never resolves, which is
+ * exactly how a broken preload bridge presented: silent, and indistinguishable from
+ * a slow network.
+ */
+const RESOLVE_TIMEOUT_MS = 60_000
+
+function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
+    )
+  })
+}
+
+/**
+ * The preload bridge is all or nothing. If it failed to load there is no point
+ * pretending the app works - say so, and say that it is a build problem, because
+ * it looks exactly like a network one.
+ */
+function bridgeReady(): boolean {
+  return typeof window.slipstream?.resolveChannel === 'function'
+}
 
 export default function App(): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -48,12 +82,38 @@ export default function App(): React.JSX.Element {
       return
     }
 
+    if (!bridgeReady()) {
+      setPhase({
+        kind: 'error',
+        reason: 'error',
+        message:
+          'The preload bridge did not load, so nothing can reach streamlink. That is a build problem, not a network one.'
+      })
+      return
+    }
+
     loginRef.current = login
     setChannel(login)
     setPhase({ kind: 'resolving', channel: login })
     setLevels([])
 
-    const result = await window.slipstream.resolveChannel(login)
+    let result: ResolveResult
+    try {
+      result = await withTimeout(
+        window.slipstream.resolveChannel(login),
+        RESOLVE_TIMEOUT_MS,
+        'streamlink did not answer within 60 seconds.'
+      )
+    } catch (err) {
+      if (loginRef.current !== login) return
+      setPhase({
+        kind: 'error',
+        reason: 'error',
+        message: err instanceof Error ? err.message : String(err)
+      })
+      return
+    }
+
     // The user may have moved on while streamlink was working.
     if (loginRef.current !== login) return
 
@@ -71,11 +131,27 @@ export default function App(): React.JSX.Element {
     chatRef.current?.connect(login)
   }, [])
 
+  const cancel = useCallback((): void => {
+    // Clearing the ref makes any in-flight resolve discard itself on return.
+    loginRef.current = null
+    setChannel(null)
+    setPhase({ kind: 'idle' })
+  }, [])
+
   /** Re-run the token dance and swap the manifest without disturbing chat. */
   const refresh = useCallback(async (): Promise<void> => {
     const login = loginRef.current
     if (!login) return
-    const result = await window.slipstream.resolveChannel(login)
+    let result: ResolveResult
+    try {
+      result = await withTimeout(
+        window.slipstream.resolveChannel(login),
+        RESOLVE_TIMEOUT_MS,
+        'streamlink did not answer within 60 seconds.'
+      )
+    } catch {
+      return // the stream is still playing; a failed refresh is not worth a teardown
+    }
     if (loginRef.current !== login) return
     if (result.ok) {
       setPhase({ kind: 'playing', stream: result.stream })
@@ -251,9 +327,16 @@ export default function App(): React.JSX.Element {
         <div className="video-wrap">
           <video ref={videoRef} playsInline />
           {phase.kind === 'idle' && <Placeholder kind="idle" />}
-          {phase.kind === 'resolving' && <Placeholder kind="resolving" channel={phase.channel} />}
+          {phase.kind === 'resolving' && (
+            <Placeholder kind="resolving" channel={phase.channel} onCancel={cancel} />
+          )}
           {phase.kind === 'error' && (
-            <Placeholder kind="error" reason={phase.reason} message={phase.message} />
+            <Placeholder
+              kind="error"
+              reason={phase.reason}
+              message={phase.message}
+              onRetry={channel ? () => void start(channel) : undefined}
+            />
           )}
           {hudVisible && <MemoryHud />}
         </div>

@@ -22,8 +22,12 @@ export function MemoryHud(): React.JSX.Element {
   useEffect(() => {
     let alive = true
     const tick = async (): Promise<void> => {
-      const next = await window.slipstream.memory()
-      if (alive) setSamples(next)
+      try {
+        const next = await window.slipstream.memory()
+        if (alive) setSamples(next)
+      } catch {
+        // The bridge is missing; the error surfaces in the main view, not here.
+      }
     }
     void tick()
     const id = setInterval(tick, 2000)

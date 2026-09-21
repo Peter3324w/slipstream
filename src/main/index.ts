@@ -27,7 +27,7 @@ function createWindow(): BrowserWindow {
     titleBarStyle: 'hidden',
     ...(process.platform === 'win32' ? { titleBarOverlay: TITLEBAR } : {}),
     webPreferences: {
-      preload: join(__dirname_, '../preload/index.mjs'),
+      preload: join(__dirname_, '../preload/index.cjs'),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
