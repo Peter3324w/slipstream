@@ -178,9 +178,9 @@ actually come in under 300MB?
 
 ### v2 — make it a real client
 
-- [ ] Twitch login via **Device Code Flow** (`https://id.twitch.tv/oauth2/device`) — public client, no secret, no localhost redirect server. Scopes: `chat:read chat:edit user:read:follows`
+- [x] Twitch login via **Device Code Flow** — public client, no secret, no localhost redirect server
 - [ ] Followed-channels list, live status — Helix `/streams/followed`. This is what makes it feel like a client rather than a launcher
-- [ ] Send chat messages
+- [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
 - [ ] DVR controls: scrub bar, configurable buffer, ad-skip
 
@@ -365,6 +365,53 @@ badges, colours and emote positions.
 message containing an emoji renders its emotes in the wrong place.
 
 ---
+
+## Signing in
+
+Device Code Flow (`https://id.twitch.tv/oauth2/device`). No client secret, no localhost redirect
+server, no embedded browser asking for a password. You approve a short code on twitch.tv and the
+app polls until it is granted.
+
+Scopes: `chat:read chat:edit user:read:follows`.
+
+### You need your own Client ID
+
+Slipstream cannot ship one. A Client ID identifies a specific registered application, and this is a
+public repository — so it is asked for on first use and kept out of the project entirely.
+
+1. Open `dev.twitch.tv/console/apps` -> **Register Your Application**
+2. Name it anything. **OAuth Redirect URLs**: `http://localhost` — the device flow never uses it,
+   but the field is required
+3. Category **Application Integration**, Client Type **Public**. Public is the part that matters:
+   the device grant is refused for a confidential client
+4. Copy the Client ID into the app's sign-in sheet
+
+Stored in the app's user-data directory, or set `SLIPSTREAM_TWITCH_CLIENT_ID` to override.
+
+### How the token is handled
+
+- **Encrypted at rest** with Electron's `safeStorage` — DPAPI on Windows. If the platform offers no
+  secure storage, the token stays in memory for the session and the app says so, rather than
+  writing a bearer credential to disk in the clear. An access token is a password.
+- **Not retained in the renderer.** The chat socket lives there, so the token has to cross IPC once
+  per connect — it is fetched at that moment and thrown away, keeping the long-lived copy in main
+  behind the keystore. Moving the IRC connection into main would remove the crossing entirely;
+  noted, not done.
+- **Refreshed early**, five minutes before expiry, so the first message after a long session does
+  not fail. A refresh token Twitch declines drops the session outright: a credential that is
+  silently dead is worse than none.
+- **Revoked on sign out**, not merely deleted, so a recovered file cannot be replayed.
+
+### What it does not do
+
+Signing in does **not** remove ads. That is Turbo or a channel subscription, decided server side —
+see the access-token payload under [Ads](#ads). Login buys sending messages and reading who you
+follow, nothing more.
+
+> Twitch answers the device grant with `{status, message}` rather than the RFC's `{error}`, so poll
+> states (`authorization_pending`, `slow_down`, `expired_token`) arrive as the *message*. Both
+> shapes are handled. `slow_down` widens the interval instead of retrying harder.
+
 
 ## Prior art
 

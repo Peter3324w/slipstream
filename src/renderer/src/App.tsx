@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { EmoteProvider, ResolveFailure, ResolveResult, ResolvedStream } from '@shared/types'
+import type {
+  AuthStatus,
+  EmoteProvider,
+  ResolveFailure,
+  ResolveResult,
+  ResolvedStream
+} from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
@@ -10,6 +16,7 @@ import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
 import { MemoryHud } from './components/MemoryHud'
 import { ChatBubble, ChatOff, Gauge } from './components/Icons'
+import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
 
 type Phase =
@@ -88,6 +95,11 @@ export default function App(): React.JSX.Element {
   const [muted, setMuted] = useState(false)
   const [chatState, setChatState] = useState<ChatState>('idle')
   const [showJump, setShowJump] = useState(false)
+  const [auth, setAuth] = useState<AuthStatus | null>(null)
+  const [showSignIn, setShowSignIn] = useState(false)
+  /** Set from USERSTATE: Twitch accepting the token is what makes sending real. */
+  const [canSend, setCanSend] = useState(false)
+
   const [chatVisible, setChatVisible] = useState(true)
   /**
    * Closed is not hidden. Hidden keeps the socket up, so the log stays current
@@ -120,6 +132,16 @@ export default function App(): React.JSX.Element {
   })
   const trafficRef = useRef<EmoteTraffic | null>(null)
   const [hudVisible, setHudVisible] = useState(false)
+
+  /**
+   * Handed to the chat client, which calls it on every connect and reconnect.
+   * Deliberately a function rather than a value: the token is fetched from main
+   * at the moment it is needed and never parked in renderer state.
+   */
+  const credentials = useCallback(async () => {
+    if (!bridgeReady()) return null
+    return window.slipstream.auth.chatCredentials()
+  }, [])
 
   const loadEmotes = useCallback(async (login: string): Promise<void> => {
     const wanted = emoteProvidersRef.current
@@ -210,7 +232,7 @@ export default function App(): React.JSX.Element {
     listRef.current?.clear()
     if (!chatClosedRef.current) {
       listRef.current?.system(`Joining #${login}...`)
-      chatRef.current?.connect(login)
+      chatRef.current?.connect(login, credentials)
       void loadEmotes(login)
     }
   }, [loadEmotes])
@@ -236,10 +258,10 @@ export default function App(): React.JSX.Element {
     if (login) {
       listRef.current?.clear()
       listRef.current?.system(`Joining #${login}...`)
-      chatRef.current?.connect(login)
+      chatRef.current?.connect(login, credentials)
       void loadEmotes(login)
     }
-  }, [loadEmotes])
+  }, [loadEmotes, credentials])
 
   /**
    * Show/hide only, in every state. Reconnecting is deliberately NOT on this
@@ -291,6 +313,7 @@ export default function App(): React.JSX.Element {
       onMessage: (m) => list.push(m),
       onSystem: (t) => list.system(t),
       onState: setChatState,
+      onIdentity: (identity) => setCanSend(identity !== null),
       onPurge: (login) => list.purge(login)
     })
     chatRef.current = chat
@@ -370,6 +393,26 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     pinnedRef.current = pinnedLabel
   }, [pinnedLabel])
+
+  useEffect(() => {
+    if (!bridgeReady()) return
+    void window.slipstream.auth.status().then(setAuth)
+    return window.slipstream.auth.onChanged(setAuth)
+  }, [])
+
+  /**
+   * Signing in or out mid-stream has to re-handshake: the token is only read
+   * when the socket opens. Keyed on signed-in-ness, not on the whole status, so
+   * a countdown tick does not drop the connection.
+   */
+  const signedIn = auth?.state === 'signed_in'
+  const wasSignedIn = useRef(signedIn)
+  useEffect(() => {
+    if (wasSignedIn.current === signedIn) return
+    wasSignedIn.current = signedIn
+    const login = loginRef.current
+    if (login && !chatClosedRef.current) chatRef.current?.connect(login, credentials)
+  }, [signedIn, credentials])
 
   useEffect(() => {
     if (chatClosed) return
@@ -508,6 +551,22 @@ export default function App(): React.JSX.Element {
 
         <div className="titlebar-actions">
           <button
+            className={`ctl ${signedIn ? 'is-on' : 'is-off'}`}
+            onClick={() => setShowSignIn(true)}
+            // Until main has answered there is nothing to show, and a button
+            // that silently does nothing is worse than one that is plainly off.
+            disabled={!auth}
+            title={
+              !auth
+                ? 'Sign-in unavailable - the app cannot reach its main process'
+                : signedIn
+                  ? `Signed in as ${auth.user?.display}`
+                  : 'Sign in to Twitch'
+            }
+          >
+            <span style={{ fontSize: 11 }}>{signedIn ? auth?.user?.display : 'Sign in'}</span>
+          </button>
+          <button
             className={`ctl ${hudVisible ? 'is-pinned' : ''}`}
             onClick={() => setHudVisible((v) => !v)}
             title="Memory readout  (F2)"
@@ -597,7 +656,22 @@ export default function App(): React.JSX.Element {
         emoteCounts={emoteCounts}
         emoteBytes={emoteBytes}
         onToggleProvider={toggleProvider}
+        signedIn={signedIn}
+        canSend={canSend}
+        onSend={(text) => chatRef.current?.say(text) ?? false}
+        onSignIn={() => setShowSignIn(true)}
       />
+
+      {showSignIn && auth && (
+        <SignIn
+          status={auth}
+          onClose={() => setShowSignIn(false)}
+          onSetClientId={(value) => void window.slipstream.auth.setClientId(value).then(setAuth)}
+          onBegin={() => void window.slipstream.auth.begin().then(setAuth)}
+          onCancel={() => void window.slipstream.auth.cancel().then(setAuth)}
+          onSignOut={() => void window.slipstream.auth.signOut().then(setAuth)}
+        />
+      )}
     </div>
   )
 }

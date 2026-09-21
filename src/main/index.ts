@@ -1,10 +1,21 @@
-import { app, shell, BrowserWindow, Menu, ipcMain, session } from 'electron'
+import { app, shell, BrowserWindow, Menu, ipcMain, safeStorage, session } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { AppInfo, EmoteProvider, EmoteSet, MemorySample, ResolveResult } from '@shared/types'
+import type { AppInfo, AuthStatus, EmoteProvider, EmoteSet, MemorySample, ResolveResult } from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
 import { resolveChannel, streamlinkVersion } from './streamlink'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
+import {
+  accessToken,
+  beginDeviceFlow,
+  cancelDeviceFlow,
+  initAuth,
+  loadClientId,
+  restoreSession,
+  setClientId,
+  signOut,
+  status as authStatus
+} from './auth'
 
 const __dirname_ = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
@@ -86,6 +97,28 @@ function applyCsp(): void {
   })
 }
 
+function registerAuthIpc(): void {
+  ipcMain.handle('auth:status', (): AuthStatus => authStatus())
+  ipcMain.handle('auth:begin', (): Promise<AuthStatus> => beginDeviceFlow())
+  ipcMain.handle('auth:cancel', (): AuthStatus => {
+    cancelDeviceFlow()
+    return authStatus()
+  })
+  ipcMain.handle('auth:signOut', (): Promise<AuthStatus> => signOut())
+  ipcMain.handle('auth:setClientId', (_e, value: unknown): Promise<AuthStatus> => {
+    if (typeof value !== 'string') return Promise.resolve(authStatus())
+    return setClientId(value)
+  })
+
+  /**
+   * The chat socket lives in the renderer, so the token has to cross once per
+   * connect. It is fetched fresh each time and never kept there, which keeps the
+   * long-lived copy in main behind the OS keystore. Moving the IRC connection
+   * itself into main would remove the crossing entirely; noted, not done.
+   */
+  ipcMain.handle('auth:chatCredentials', () => accessToken())
+}
+
 function registerIpc(): void {
   ipcMain.handle('stream:resolve', async (_e, channel: unknown): Promise<ResolveResult> => {
     if (typeof channel !== 'string')
@@ -146,11 +179,27 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
     setEmoteCacheDir(app.getPath('userData'))
+
+    initAuth(
+      app.getPath('userData'),
+      (status) => {
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send('auth:changed', status)
+      },
+      {
+        isAvailable: () => safeStorage.isEncryptionAvailable(),
+        encrypt: (plain) => safeStorage.encryptString(plain),
+        decrypt: (data) => safeStorage.decryptString(data)
+      }
+    )
+    await loadClientId()
+    await restoreSession()
+
     applyCsp()
     registerIpc()
+    registerAuthIpc()
     createWindow()
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

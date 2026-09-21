@@ -17,10 +17,15 @@ export interface ChatMessage {
 
 export type ChatState = 'idle' | 'connecting' | 'open' | 'closed'
 
+/** Fetched from main per connect, so no token is retained in the renderer. */
+export type CredentialSource = () => Promise<{ token: string; login: string } | null>
+
 export interface ChatHandlers {
   onMessage: (msg: ChatMessage) => void
   onSystem: (text: string) => void
   onState: (state: ChatState) => void
+  /** True once Twitch accepts the token, i.e. sending is possible. */
+  onIdentity: (identity: { login: string; display: string; color: string | null } | null) => void
   /** A moderator cleared this user's messages. */
   onPurge: (login: string) => void
 }
@@ -135,15 +140,44 @@ export class TwitchChat {
   private bytes = 0
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private closedByUs = false
+  private credentials: CredentialSource | null = null
+  private identity: { login: string; display: string; color: string | null } | null = null
 
   constructor(private readonly handlers: ChatHandlers) {}
 
-  connect(channel: string): void {
+  connect(channel: string, credentials?: CredentialSource): void {
     this.disconnect()
     this.channel = channel.toLowerCase()
     this.closedByUs = false
     this.bytes = 0
-    this.open()
+    this.credentials = credentials ?? null
+    void this.open()
+  }
+
+  get canSend(): boolean {
+    return this.identity !== null && this.isConnected
+  }
+
+  /**
+   * Twitch does not echo your own PRIVMSG back, so the message has to be drawn
+   * locally. The identity comes from USERSTATE, which is why sending before it
+   * arrives is refused rather than guessed at.
+   */
+  say(text: string): boolean {
+    const body = text.trim()
+    if (!body || !this.channel || !this.identity || !this.isConnected) return false
+
+    this.ws?.send(`PRIVMSG #${this.channel} :${body}`)
+    this.handlers.onMessage({
+      id: `self-${Date.now()}-${Math.random()}`,
+      login: this.identity.login,
+      display: this.identity.display,
+      color: this.identity.color,
+      body,
+      emotes: [],
+      ts: Date.now()
+    })
+    return true
   }
 
   /** Approximate: payload only, excluding TLS and WebSocket framing overhead. */
@@ -155,19 +189,30 @@ export class TwitchChat {
     return this.ws?.readyState === WebSocket.OPEN
   }
 
-  private open(): void {
+  private async open(): Promise<void> {
     if (!this.channel) return
     this.handlers.onState('connecting')
+    this.identity = null
+    this.handlers.onIdentity(null)
+
+    // Fetched before the socket opens, because PASS has to be the first line
+    // and the handshake handler cannot await.
+    const creds = this.credentials ? await this.credentials().catch(() => null) : null
+    if (this.closedByUs || !this.channel) return
 
     const ws = new WebSocket(ENDPOINT)
     this.ws = ws
 
     ws.onopen = () => {
-      // Reading chat needs no account at all: any justinfan<digits> nick is
-      // accepted as an anonymous, read-only session.
-      const nick = `justinfan${10000 + Math.floor(Math.random() * 89999)}`
       ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
-      ws.send(`NICK ${nick}`)
+      if (creds) {
+        ws.send(`PASS oauth:${creds.token}`)
+        ws.send(`NICK ${creds.login}`)
+      } else {
+        // Reading needs no account at all: any justinfan<digits> nick is
+        // accepted as an anonymous, read-only session.
+        ws.send(`NICK justinfan${10000 + Math.floor(Math.random() * 89999)}`)
+      }
       ws.send(`JOIN #${this.channel}`)
       this.retries = 0
       this.handlers.onState('open')
@@ -189,9 +234,11 @@ export class TwitchChat {
       this.ws = null
       this.handlers.onState('closed')
       if (this.closedByUs) return
+      this.identity = null
+      this.handlers.onIdentity(null)
       const delay = Math.min(30_000, 1000 * 2 ** this.retries++)
       this.handlers.onSystem(`Chat disconnected. Reconnecting in ${Math.round(delay / 1000)}s...`)
-      this.retryTimer = setTimeout(() => this.open(), delay)
+      this.retryTimer = setTimeout(() => void this.open(), delay)
     }
   }
 
@@ -219,15 +266,40 @@ export class TwitchChat {
         break
       }
 
+      case 'USERSTATE':
+      case 'GLOBALUSERSTATE': {
+        // Twitch only sends these once the token is accepted, so their arrival
+        // is the signal that sending will work.
+        const display = line.tags['display-name']
+        if (display) {
+          this.identity = {
+            login: display.toLowerCase(),
+            display,
+            color: line.tags['color'] || null
+          }
+          this.handlers.onIdentity(this.identity)
+        }
+        break
+      }
+
       case 'CLEARCHAT': {
         const target = line.params[1]
         if (target) this.handlers.onPurge(target)
         break
       }
 
-      case 'NOTICE':
-        this.handlers.onSystem(line.params[1] ?? '')
+      case 'NOTICE': {
+        const text = line.params[1] ?? ''
+        // A bad token closes the socket straight after this, and the generic
+        // reconnect would otherwise retry it forever with the same bad token.
+        if (/login authentication failed|improperly formatted auth/i.test(text)) {
+          this.closedByUs = true
+          this.identity = null
+          this.handlers.onIdentity(null)
+        }
+        this.handlers.onSystem(text)
         break
+      }
 
       case '353': // end of the name list; the join actually succeeded
       case '366':
@@ -247,5 +319,7 @@ export class TwitchChat {
       this.ws = null
     }
     this.channel = null
+    this.identity = null
+    this.credentials = null
   }
 }

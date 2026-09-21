@@ -3,6 +3,7 @@ import type { ChatState } from '@/chat/irc'
 import type { EmoteProvider } from '@shared/types'
 import { Power } from './Icons'
 import { EmoteMenu, data } from './EmoteMenu'
+import { ChatInput } from './ChatInput'
 
 interface Props {
   logRef: RefObject<HTMLDivElement | null>
@@ -19,6 +20,10 @@ interface Props {
   emoteCounts: Record<EmoteProvider, number>
   emoteBytes: number
   onToggleProvider: (provider: EmoteProvider) => void
+  signedIn: boolean
+  canSend: boolean
+  onSend: (text: string) => boolean
+  onSignIn: () => void
 }
 
 const LABEL: Record<ChatState, string> = {
@@ -87,6 +92,15 @@ export function ChatPane(props: Props): React.JSX.Element {
           </button>
         )}
       </div>
+
+      {!props.closed && (
+        <ChatInput
+          signedIn={props.signedIn}
+          canSend={props.canSend}
+          onSend={props.onSend}
+          onSignIn={props.onSignIn}
+        />
+      )}
     </aside>
   )
 }

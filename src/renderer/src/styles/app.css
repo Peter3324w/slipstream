@@ -564,3 +564,112 @@ input { font: inherit; color: inherit; }
   font-size: 11px;
   color: var(--text-faint);
 }
+
+/* --------------------------------------------------------------- sign in */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 6, 9, 0.62);
+  backdrop-filter: blur(3px);
+  animation: fade 0.14s var(--ease);
+}
+@keyframes fade { from { opacity: 0; } }
+
+.sheet {
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  animation: rise 0.18s var(--ease);
+}
+.sheet h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
+.sheet p { margin: 0 0 12px; color: var(--text-dim); line-height: 1.6; font-size: 13px; }
+.sheet code {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 2px 6px; border-radius: 5px; color: var(--text);
+  user-select: text;
+}
+.sheet .fine { font-size: 12px; color: var(--text-faint); }
+.sheet .warn {
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(240, 85, 106, 0.1);
+  border: 1px solid rgba(240, 85, 106, 0.28);
+  color: #ffb4bd;
+  font-size: 12px;
+}
+
+.steps { margin: 0 0 16px; padding-left: 20px; color: var(--text-dim); font-size: 13px; }
+.steps li { margin-bottom: 8px; line-height: 1.55; }
+.steps b { color: var(--text); font-weight: 600; }
+
+.sheet .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.sheet .row .btn { height: 32px; }
+.channel-input.wide { flex: 1; width: auto; height: 32px; }
+
+/* The device code is the one thing on screen that has to be transcribed. */
+.code {
+  display: block;
+  width: 100%;
+  margin: 4px 0 6px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-align: center;
+  color: var(--text);
+  user-select: all;
+  transition: border-color 0.15s, background 0.15s;
+}
+.code:hover { border-color: var(--accent-dim); background: var(--surface-3); }
+
+/* ------------------------------------------------------------ chat input */
+
+.chat-foot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.chat-entry {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+  font-size: 13px;
+  transition: border-color 0.15s;
+}
+.chat-entry::placeholder { color: var(--text-faint); }
+.chat-entry:focus { border-color: var(--accent-dim); }
+.chat-entry:disabled { opacity: 0.55; }
+
+.chat-foot .btn { height: 30px; }
+.chat-signin { width: 100%; justify-content: center; }
+
+.chat-left {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.chat-left.is-low { color: var(--live); }

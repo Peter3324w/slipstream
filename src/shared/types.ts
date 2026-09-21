@@ -78,3 +78,34 @@ export interface EmoteSet {
   /** Non-fatal problems worth surfacing, e.g. a provider being unreachable. */
   errors: string[]
 }
+
+/** Scopes requested at sign-in. Read chat, send chat, list who you follow. */
+export const AUTH_SCOPES = ['chat:read', 'chat:edit', 'user:read:follows'] as const
+
+export interface TwitchUser {
+  id: string
+  login: string
+  display: string
+}
+
+export type AuthState =
+  /** No client id configured yet — the app cannot ask Twitch anything. */
+  | 'needs_client_id'
+  | 'signed_out'
+  /** Device flow running: show the code and wait. */
+  | 'pending'
+  | 'signed_in'
+  | 'error'
+
+export interface AuthStatus {
+  state: AuthState
+  user: TwitchUser | null
+  scopes: string[]
+  /** Populated while `pending`. */
+  userCode: string | null
+  verificationUri: string | null
+  expiresAt: number | null
+  message: string | null
+  /** False when the OS gave us no way to encrypt at rest; see auth.ts. */
+  persistent: boolean
+}
