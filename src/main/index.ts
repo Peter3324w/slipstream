@@ -60,7 +60,23 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  win.once('ready-to-show', () => win.show())
+  /**
+   * `ready-to-show` avoids a white flash, but it is an optimisation and it does
+   * not always arrive: after a --watch restart the renderer painted and the
+   * window stayed hidden, with the process alive and the page reachable over
+   * CDP. The app looked closed while running.
+   *
+   * A window that never appears is a total failure; a window that appears a
+   * frame early is a cosmetic flash. So take the flash, and reveal on whichever
+   * of three signals lands first.
+   */
+  const reveal = (): void => {
+    if (!win.isDestroyed() && !win.isVisible()) win.show()
+  }
+  win.once('ready-to-show', reveal)
+  win.webContents.once('did-finish-load', reveal)
+  const failsafe = setTimeout(reveal, 4000)
+  win.on('closed', () => clearTimeout(failsafe))
 
   // This app never navigates. Anything that tries is either a mistake or hostile.
   win.webContents.setWindowOpenHandler(({ url }) => {
