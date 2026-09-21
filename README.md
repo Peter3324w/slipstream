@@ -349,14 +349,20 @@ the per-process memory readout.
   socket bind was refused (`WSAEACCES`) by an instance killed seconds earlier, not ignored. Point
   CDP at `127.0.0.1:9222` to drive the real UI, which is the only way to exercise anything behind
   the preload bridge.
-- **A CSS edit made while `--watch` is restarting Electron can be lost.** Vite emits the HMR
-  update with no client attached, and the reconnecting renderer gets the previous transform. The
-  symptom is specific and confusing: rules edited *within* the file apply, while a block appended
-  at the end is simply absent from `document.styleSheets`. Touch the file again to force a fresh
-  emit. Worth checking for real before blaming the CSS:
+- **Vite can serve a stale module after a broken build or a `--watch` restart**, and it is not
+  limited to CSS. Seen twice: a stylesheet block appended during an Electron restart never reached
+  `document.styleSheets`, and a component kept rendering its *previous* version while a sibling
+  component in the same commit rendered the new one — after the file that broke the build was
+  fixed. An ordinary reload is not enough; the fix is a cache-ignoring reload, or touching the file
+  to force a fresh transform.
+
+  The lesson is to check rather than infer. Source being right does not mean the page has it:
   ```js
+  // is the rule actually there?
   [...document.styleSheets].flatMap(s => [...s.cssRules])
     .filter(r => r.selectorText?.startsWith('.yourclass')).length
+  // is the component the version you think?
+  [...document.querySelector('.chat').children].map(c => c.className)
   ```
 - **If `electron-v*.zip` downloads at 0 B/s**, the release asset CDN is unreachable, not the
   network. Point Electron at a mirror:
@@ -455,6 +461,15 @@ Stored in the app's user-data directory, or set `SLIPSTREAM_TWITCH_CLIENT_ID` to
   not fail. A refresh token Twitch declines drops the session outright: a credential that is
   silently dead is worse than none.
 - **Revoked on sign out**, not merely deleted, so a recovered file cannot be replayed.
+
+### It can be put away
+
+Sign-in is optional in a way the rest of the app is not — watching, reading chat, emotes and
+favourites all work with no account, so the entry point is hideable. **Hide sign-in** in the sheet
+removes the titlebar button and the chat message box; nothing is signed out and no code is removed.
+It stays reachable while signed in, or there would be no way to sign out.
+
+To bring it back, clear `slipstream.hideSignIn` from the app's local storage.
 
 ### What it does not do
 

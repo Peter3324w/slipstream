@@ -21,6 +21,7 @@ interface Props {
   emoteBytes: number
   onToggleProvider: (provider: EmoteProvider) => void
   signedIn: boolean
+  showSignIn: boolean
   canSend: boolean
   onSend: (text: string) => boolean
   onSignIn: () => void
@@ -93,7 +94,9 @@ export function ChatPane(props: Props): React.JSX.Element {
         )}
       </div>
 
-      {!props.closed && (
+      {/* With sign-in put away there is nothing to offer here: reading needs no
+          account, and a prompt you cannot act on is worse than no prompt. */}
+      {!props.closed && (props.signedIn || props.showSignIn) && (
         <ChatInput
           signedIn={props.signedIn}
           canSend={props.canSend}

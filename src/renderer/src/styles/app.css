@@ -806,3 +806,15 @@ input { font: inherit; color: inherit; }
 }
 .rail-input::placeholder { color: var(--text-faint); }
 .rail-input:focus { border-color: var(--accent-dim); }
+
+.btn-quiet { margin-left: auto; color: var(--text-faint); }
+.btn-quiet:hover { color: var(--text-dim); }
+
+.linkish {
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: inherit;
+}
+.linkish:hover { color: var(--text); }

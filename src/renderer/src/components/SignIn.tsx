@@ -8,6 +8,8 @@ interface Props {
   onBegin: () => void
   onCancel: () => void
   onSignOut: () => void
+  /** Puts the entry point away; the feature stays, nothing is signed out. */
+  onHide: () => void
 }
 
 function countdown(expiresAt: number | null): string {
@@ -81,6 +83,13 @@ export function SignIn(props: Props): React.JSX.Element {
               Stored in this app&rsquo;s data directory, never in the project.
               <code>SLIPSTREAM_TWITCH_CLIENT_ID</code> overrides it.
             </p>
+            <p className="fine">
+              Only needed to <b>send</b> chat messages. Reading chat, watching, emotes and
+              favourites all work without an account.{' '}
+              <button className="linkish" onClick={props.onHide}>
+                Hide sign-in
+              </button>
+            </p>
           </>
         )}
 
@@ -98,6 +107,9 @@ export function SignIn(props: Props): React.JSX.Element {
               </button>
               <button className="btn" onClick={props.onClose}>
                 Not now
+              </button>
+              <button className="btn btn-quiet" onClick={props.onHide}>
+                Hide sign-in
               </button>
             </div>
           </>

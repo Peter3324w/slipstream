@@ -31,6 +31,12 @@ const VOLUME_KEY = 'slipstream.volume'
 const QUALITY_KEY = 'slipstream.quality'
 const CHAT_CLOSED_KEY = 'slipstream.chatClosed'
 const RAIL_KEY = 'slipstream.rail'
+/**
+ * Sign-in is optional in a way the rest of this app is not: watching, reading
+ * chat, emotes and favourites all work with no account. It is only needed to
+ * *send* messages, so the entry point can be put away without losing anything.
+ */
+const HIDE_SIGNIN_KEY = 'slipstream.hideSignIn'
 /** Twitch changes slowly; a minute is responsive without hammering GQL. */
 const SUMMARY_POLL_MS = 60_000
 const EMOTES_KEY = 'slipstream.emotes'
@@ -105,7 +111,8 @@ export default function App(): React.JSX.Element {
   const [railVisible, setRailVisible] = useState(() => localStorage.getItem(RAIL_KEY) !== '0')
 
   const [auth, setAuth] = useState<AuthStatus | null>(null)
-  const [showSignIn, setShowSignIn] = useState(false)
+  const [showSignInSheet, setShowSignInSheet] = useState(false)
+  const [hideSignIn, setHideSignIn] = useState(() => localStorage.getItem(HIDE_SIGNIN_KEY) === '1')
   /** Set from USERSTATE: Twitch accepting the token is what makes sending real. */
   const [canSend, setCanSend] = useState(false)
 
@@ -455,6 +462,8 @@ export default function App(): React.JSX.Element {
    * a countdown tick does not drop the connection.
    */
   const signedIn = auth?.state === 'signed_in'
+  // Always reachable while signed in, or there would be no way to sign out.
+  const showSignIn = signedIn || !hideSignIn
   const wasSignedIn = useRef(signedIn)
   useEffect(() => {
     if (wasSignedIn.current === signedIn) return
@@ -633,22 +642,24 @@ export default function App(): React.JSX.Element {
           >
             <Rail />
           </button>
-          <button
-            className={`ctl ${signedIn ? 'is-on' : 'is-off'}`}
-            onClick={() => setShowSignIn(true)}
-            // Until main has answered there is nothing to show, and a button
-            // that silently does nothing is worse than one that is plainly off.
-            disabled={!auth}
-            title={
-              !auth
-                ? 'Sign-in unavailable - the app cannot reach its main process'
-                : signedIn
-                  ? `Signed in as ${auth.user?.display}`
-                  : 'Sign in to Twitch'
-            }
-          >
-            <span style={{ fontSize: 11 }}>{signedIn ? auth?.user?.display : 'Sign in'}</span>
-          </button>
+          {showSignIn && (
+            <button
+              className={`ctl ${signedIn ? 'is-on' : 'is-off'}`}
+              onClick={() => setShowSignInSheet(true)}
+              // Until main has answered there is nothing to show, and a button
+              // that silently does nothing is worse than one that is plainly off.
+              disabled={!auth}
+              title={
+                !auth
+                  ? 'Sign-in unavailable - the app cannot reach its main process'
+                  : signedIn
+                    ? `Signed in as ${auth.user?.display}`
+                    : 'Sign in to Twitch'
+              }
+            >
+              <span style={{ fontSize: 11 }}>{signedIn ? auth?.user?.display : 'Sign in'}</span>
+            </button>
+          )}
           <button
             className={`ctl ${hudVisible ? 'is-pinned' : ''}`}
             onClick={() => setHudVisible((v) => !v)}
@@ -748,19 +759,25 @@ export default function App(): React.JSX.Element {
         emoteBytes={emoteBytes}
         onToggleProvider={toggleProvider}
         signedIn={signedIn}
+        showSignIn={showSignIn}
         canSend={canSend}
         onSend={(text) => chatRef.current?.say(text) ?? false}
-        onSignIn={() => setShowSignIn(true)}
+        onSignIn={() => setShowSignInSheet(true)}
       />
 
-      {showSignIn && auth && (
+      {showSignInSheet && auth && (
         <SignIn
           status={auth}
-          onClose={() => setShowSignIn(false)}
+          onClose={() => setShowSignInSheet(false)}
           onSetClientId={(value) => void window.slipstream.auth.setClientId(value).then(setAuth)}
           onBegin={() => void window.slipstream.auth.begin().then(setAuth)}
           onCancel={() => void window.slipstream.auth.cancel().then(setAuth)}
           onSignOut={() => void window.slipstream.auth.signOut().then(setAuth)}
+          onHide={() => {
+            localStorage.setItem(HIDE_SIGNIN_KEY, '1')
+            setHideSignIn(true)
+            setShowSignInSheet(false)
+          }}
         />
       )}
     </div>
