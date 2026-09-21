@@ -179,7 +179,8 @@ actually come in under 300MB?
 ### v2 — make it a real client
 
 - [x] Twitch login via **Device Code Flow** — public client, no secret, no localhost redirect server
-- [ ] Followed-channels list, live status — Helix `/streams/followed`. This is what makes it feel like a client rather than a launcher
+- [x] **Favourites list with live status** — a local list rather than Twitch's follow graph, so it
+      needs no account at all. This is what makes it feel like a client rather than a launcher
 - [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
 - [ ] DVR controls: scrub bar, configurable buffer, ad-skip
@@ -348,6 +349,15 @@ the per-process memory readout.
   socket bind was refused (`WSAEACCES`) by an instance killed seconds earlier, not ignored. Point
   CDP at `127.0.0.1:9222` to drive the real UI, which is the only way to exercise anything behind
   the preload bridge.
+- **A CSS edit made while `--watch` is restarting Electron can be lost.** Vite emits the HMR
+  update with no client attached, and the reconnecting renderer gets the previous transform. The
+  symptom is specific and confusing: rules edited *within* the file apply, while a block appended
+  at the end is simply absent from `document.styleSheets`. Touch the file again to force a fresh
+  emit. Worth checking for real before blaming the CSS:
+  ```js
+  [...document.styleSheets].flatMap(s => [...s.cssRules])
+    .filter(r => r.selectorText?.startsWith('.yourclass')).length
+  ```
 - **If `electron-v*.zip` downloads at 0 B/s**, the release asset CDN is unreachable, not the
   network. Point Electron at a mirror:
   ```
@@ -375,6 +385,40 @@ badges, colours and emote positions.
 message containing an emoji renders its emotes in the wrong place.
 
 ---
+
+## Favourites
+
+A local list, not Twitch's follow graph. That was originally meant to be Helix `/streams/followed`,
+which needs a token — and the account that would issue one is [blocked behind 2FA](#signing-in).
+It turns out not to matter: **live status needs no authentication at all.**
+
+Twitch's public GraphQL endpoint answers a plain query for a batch of logins. Verified with 23
+logins in a single request:
+
+```graphql
+query Favourites($logins: [String!]) {
+  users(logins: $logins) {
+    login displayName profileImageURL(width: 50)
+    stream { viewersCount game { displayName } }
+    broadcastSettings { title }
+  }
+}
+```
+
+**A raw query, deliberately, not one of Twitch's persisted-query hashes.** The hashes are
+undocumented and get rotated; a query string asking for exactly these fields keeps working. It also
+returns name, avatar, game, title and viewer count together, where the `UseLive` persisted query
+used elsewhere only answers live or not.
+
+A `null` entry means Twitch does not know that login, which is how a typo shows as
+*Unknown channel* rather than silently sitting there looking offline forever. Rows sort live first
+by audience, then offline alphabetically — a list in stored order buries the one fact you opened it
+for. Polled every 60s and on window focus, since coming back to the app is exactly when a stale
+live dot misleads.
+
+The list lives in the app's user-data directory rather than renderer storage: clearing the window's
+site data should not lose it.
+
 
 ## Signing in
 

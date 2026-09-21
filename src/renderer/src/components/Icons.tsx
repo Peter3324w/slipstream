@@ -95,3 +95,22 @@ export const Power = ({ size = 14 }: P): React.JSX.Element => (
     <path d="M7.5 7a6.5 6.5 0 1 0 9 0" />
   </svg>
 )
+
+export const Star = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M12 4.2l2.4 4.9 5.4.8-3.9 3.8.9 5.3-4.8-2.5-4.8 2.5.9-5.3-3.9-3.8 5.4-.8z" />
+  </svg>
+)
+
+export const StarOn = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)} fill="currentColor">
+    <path d="M12 4.2l2.4 4.9 5.4.8-3.9 3.8.9 5.3-4.8-2.5-4.8 2.5.9-5.3-3.9-3.8 5.4-.8z" />
+  </svg>
+)
+
+export const Rail = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <rect x="4" y="5" width="16" height="14" rx="2" />
+    <path d="M10 5v14" />
+  </svg>
+)

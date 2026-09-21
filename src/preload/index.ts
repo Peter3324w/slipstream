@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AppInfo,
   AuthStatus,
+  ChannelSummary,
   EmoteProvider,
   EmoteSet,
   MemorySample,
@@ -17,6 +18,14 @@ const api = {
     ipcRenderer.invoke('stream:resolve', channel),
   fetchEmotes: (channel: string, providers: EmoteProvider[]): Promise<EmoteSet> =>
     ipcRenderer.invoke('emotes:fetch', channel, providers),
+  favourites: {
+    list: (): Promise<string[]> => ipcRenderer.invoke('favourites:list'),
+    add: (login: string): Promise<string[]> => ipcRenderer.invoke('favourites:add', login),
+    remove: (login: string): Promise<string[]> => ipcRenderer.invoke('favourites:remove', login),
+    summaries: (logins: string[]): Promise<ChannelSummary[]> =>
+      ipcRenderer.invoke('channels:summaries', logins)
+  },
+
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
 
   auth: {

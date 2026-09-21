@@ -1,10 +1,20 @@
 import { app, shell, BrowserWindow, Menu, ipcMain, safeStorage, session } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { AppInfo, AuthStatus, EmoteProvider, EmoteSet, MemorySample, ResolveResult } from '@shared/types'
+import type {
+  AppInfo,
+  AuthStatus,
+  ChannelSummary,
+  EmoteProvider,
+  EmoteSet,
+  MemorySample,
+  ResolveResult
+} from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
 import { resolveChannel, streamlinkVersion } from './streamlink'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
+import { channelSummaries } from './twitch'
+import { addFavourite, listFavourites, removeFavourite, setFavouritesDir } from './favourites'
 import {
   accessToken,
   beginDeviceFlow,
@@ -173,6 +183,18 @@ function registerIpc(): void {
     }
   )
 
+  ipcMain.handle('favourites:list', (): Promise<string[]> => listFavourites())
+  ipcMain.handle('favourites:add', (_e, login: unknown): Promise<string[]> =>
+    typeof login === 'string' ? addFavourite(login) : listFavourites()
+  )
+  ipcMain.handle('favourites:remove', (_e, login: unknown): Promise<string[]> =>
+    typeof login === 'string' ? removeFavourite(login) : listFavourites()
+  )
+  ipcMain.handle('channels:summaries', (_e, logins: unknown): Promise<ChannelSummary[]> => {
+    if (!Array.isArray(logins)) return Promise.resolve([])
+    return channelSummaries(logins.filter((l): l is string => typeof l === 'string').slice(0, 200))
+  })
+
   ipcMain.handle('app:info', async (): Promise<AppInfo> => ({
     version: app.getVersion(),
     electron: process.versions.electron,
@@ -208,6 +230,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
     setEmoteCacheDir(app.getPath('userData'))
+    setFavouritesDir(app.getPath('userData'))
 
     initAuth(
       app.getPath('userData'),

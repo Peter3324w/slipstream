@@ -11,6 +11,8 @@
  * tab and the same one streamlink itself sends. It is not a credential, and nothing
  * here is authenticated: the query asks only whether a login resolves to a user.
  */
+import type { ChannelSummary } from '@shared/types'
+
 const GQL = 'https://gql.twitch.tv/gql'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
 
@@ -56,4 +58,93 @@ export async function lookupChannel(login: string): Promise<ChannelLookup> {
 /** Convenience for callers that only care whether the channel exists. */
 export async function channelExistence(login: string): Promise<Existence> {
   return (await lookupChannel(login)).state
+}
+
+/**
+ * Live status for a list of channels, in as few requests as possible.
+ *
+ * Deliberately a raw query rather than one of Twitch's persisted-query hashes.
+ * The hashes are undocumented and get rotated; a query string that asks for
+ * exactly these fields keeps working, and it returns name, avatar, game, title
+ * and viewers together where UseLive only says live or not.
+ *
+ * Verified: 23 logins in a single request.
+ */
+const SUMMARY_QUERY = `query Favourites($logins: [String!]) {
+  users(logins: $logins) {
+    login
+    displayName
+    profileImageURL(width: 50)
+    stream { viewersCount game { displayName } }
+    broadcastSettings { title }
+  }
+}`
+
+/** Conservative: 23 was fine, but a long list should not ride on one request. */
+const BATCH = 25
+
+interface GqlUser {
+  login: string
+  displayName?: string
+  profileImageURL?: string
+  stream?: { viewersCount?: number; game?: { displayName?: string } | null } | null
+  broadcastSettings?: { title?: string } | null
+}
+
+export async function channelSummaries(logins: string[]): Promise<ChannelSummary[]> {
+  if (!logins.length) return []
+
+  const chunks: string[][] = []
+  for (let i = 0; i < logins.length; i += BATCH) chunks.push(logins.slice(i, i + BATCH))
+
+  const found = new Map<string, ChannelSummary>()
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const res = await fetch(GQL, {
+          method: 'POST',
+          headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: SUMMARY_QUERY, variables: { logins: chunk } }),
+          signal: AbortSignal.timeout(15_000)
+        })
+        if (!res.ok) return
+
+        const body = (await res.json()) as { data?: { users?: (GqlUser | null)[] } }
+        for (const user of body.data?.users ?? []) {
+          // A null entry means Twitch does not know that login at all.
+          if (!user?.login) continue
+          const stream = user.stream
+          found.set(user.login.toLowerCase(), {
+            login: user.login.toLowerCase(),
+            display: user.displayName || user.login,
+            avatar: user.profileImageURL ?? null,
+            live: Boolean(stream),
+            viewers: stream?.viewersCount ?? null,
+            game: stream?.game?.displayName ?? null,
+            title: user.broadcastSettings?.title ?? null,
+            exists: true
+          })
+        }
+      } catch {
+        // A failed batch leaves those channels unknown rather than failing the lot.
+      }
+    })
+  )
+
+  // Preserve the caller's order, and keep channels Twitch did not return so the
+  // list does not silently lose a typo'd entry the user can still delete.
+  return logins.map(
+    (login) =>
+      found.get(login.toLowerCase()) ?? {
+        login,
+        display: login,
+        avatar: null,
+        live: false,
+        viewers: null,
+        game: null,
+        title: null,
+        exists: false
+      }
+  )
 }

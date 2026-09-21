@@ -109,3 +109,16 @@ export interface AuthStatus {
   /** False when the OS gave us no way to encrypt at rest; see auth.ts. */
   persistent: boolean
 }
+
+/** One row in the favourites list. */
+export interface ChannelSummary {
+  login: string
+  display: string
+  avatar: string | null
+  live: boolean
+  viewers: number | null
+  game: string | null
+  title: string | null
+  /** False when Twitch returned null for this login — no such channel. */
+  exists: boolean
+}

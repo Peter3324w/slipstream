@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AuthStatus,
+  ChannelSummary,
   EmoteProvider,
   ResolveFailure,
   ResolveResult,
@@ -15,7 +16,8 @@ import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
 import { MemoryHud } from './components/MemoryHud'
-import { ChatBubble, ChatOff, Gauge } from './components/Icons'
+import { ChatBubble, ChatOff, Gauge, Rail, Star, StarOn } from './components/Icons'
+import { Favourites } from './components/Favourites'
 import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
 
@@ -28,6 +30,9 @@ type Phase =
 const VOLUME_KEY = 'slipstream.volume'
 const QUALITY_KEY = 'slipstream.quality'
 const CHAT_CLOSED_KEY = 'slipstream.chatClosed'
+const RAIL_KEY = 'slipstream.rail'
+/** Twitch changes slowly; a minute is responsive without hammering GQL. */
+const SUMMARY_POLL_MS = 60_000
 const EMOTES_KEY = 'slipstream.emotes'
 
 /**
@@ -95,6 +100,10 @@ export default function App(): React.JSX.Element {
   const [muted, setMuted] = useState(false)
   const [chatState, setChatState] = useState<ChatState>('idle')
   const [showJump, setShowJump] = useState(false)
+  const [favourites, setFavourites] = useState<string[]>([])
+  const [summaries, setSummaries] = useState<ChannelSummary[]>([])
+  const [railVisible, setRailVisible] = useState(() => localStorage.getItem(RAIL_KEY) !== '0')
+
   const [auth, setAuth] = useState<AuthStatus | null>(null)
   const [showSignIn, setShowSignIn] = useState(false)
   /** Set from USERSTATE: Twitch accepting the token is what makes sending real. */
@@ -141,6 +150,15 @@ export default function App(): React.JSX.Element {
   const credentials = useCallback(async () => {
     if (!bridgeReady()) return null
     return window.slipstream.auth.chatCredentials()
+  }, [])
+
+  const refreshSummaries = useCallback(async (logins: string[]): Promise<void> => {
+    if (!bridgeReady()) return
+    if (!logins.length) {
+      setSummaries([])
+      return
+    }
+    setSummaries(await window.slipstream.favourites.summaries(logins))
   }, [])
 
   const loadEmotes = useCallback(async (login: string): Promise<void> => {
@@ -269,6 +287,16 @@ export default function App(): React.JSX.Element {
    */
   const toggleChat = useCallback((): void => setChatVisible((v) => !v), [])
 
+  const mutateFavourites = useCallback(
+    async (fn: (login: string) => Promise<string[]>, login: string): Promise<void> => {
+      if (!bridgeReady()) return
+      const next = await fn(login)
+      setFavourites(next)
+      void refreshSummaries(next)
+    },
+    [refreshSummaries]
+  )
+
   const cancel = useCallback((): void => {
     // Clearing the ref makes any in-flight resolve discard itself on return.
     loginRef.current = null
@@ -396,6 +424,27 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!bridgeReady()) return
+    void window.slipstream.favourites.list().then((list) => {
+      setFavourites(list)
+      void refreshSummaries(list)
+    })
+  }, [refreshSummaries])
+
+  // Poll, and catch up whenever the window is looked at again - coming back to
+  // the app is exactly when a stale live/offline dot would mislead.
+  useEffect(() => {
+    if (!favourites.length) return
+    const tick = (): void => void refreshSummaries(favourites)
+    const id = setInterval(tick, SUMMARY_POLL_MS)
+    window.addEventListener('focus', tick)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', tick)
+    }
+  }, [favourites, refreshSummaries])
+
+  useEffect(() => {
+    if (!bridgeReady()) return
     void window.slipstream.auth.status().then(setAuth)
     return window.slipstream.auth.onChanged(setAuth)
   }, [])
@@ -497,6 +546,12 @@ export default function App(): React.JSX.Element {
         case 'c':
           toggleChat()
           break
+        case 'b':
+          setRailVisible((v) => {
+            localStorage.setItem(RAIL_KEY, v ? '0' : '1')
+            return !v
+          })
+          break
         case 'f2':
           setHudVisible((v) => !v)
           break
@@ -511,7 +566,7 @@ export default function App(): React.JSX.Element {
   const stream = phase.kind === 'playing' ? phase.stream : null
 
   return (
-    <div className={`app ${chatVisible ? '' : 'chat-hidden'}`}>
+    <div className={`app ${chatVisible ? '' : 'chat-hidden'} ${railVisible ? '' : 'rail-hidden'}`}>
       <header className="titlebar">
         <div className="wordmark">
           <span className="dot" />
@@ -550,6 +605,34 @@ export default function App(): React.JSX.Element {
         )}
 
         <div className="titlebar-actions">
+          {channel && (
+            <button
+              className={`ctl ${favourites.includes(channel) ? 'is-pinned' : 'is-off'}`}
+              onClick={() =>
+                void mutateFavourites(
+                  favourites.includes(channel)
+                    ? window.slipstream.favourites.remove
+                    : window.slipstream.favourites.add,
+                  channel
+                )
+              }
+              title={favourites.includes(channel) ? 'Remove from favourites' : 'Add to favourites'}
+            >
+              {favourites.includes(channel) ? <StarOn /> : <Star />}
+            </button>
+          )}
+          <button
+            className={`ctl ${railVisible ? 'is-on' : 'is-off'}`}
+            onClick={() =>
+              setRailVisible((v) => {
+                localStorage.setItem(RAIL_KEY, v ? '0' : '1')
+                return !v
+              })
+            }
+            title="Toggle favourites  (B)"
+          >
+            <Rail />
+          </button>
           <button
             className={`ctl ${signedIn ? 'is-on' : 'is-off'}`}
             onClick={() => setShowSignIn(true)}
@@ -590,6 +673,14 @@ export default function App(): React.JSX.Element {
           </button>
         </div>
       </header>
+
+      <Favourites
+        channels={summaries}
+        current={channel}
+        onPick={(login) => void start(login)}
+        onRemove={(login) => void mutateFavourites(window.slipstream.favourites.remove, login)}
+        onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
+      />
 
       <main className="stage">
         <div className="video-wrap">
