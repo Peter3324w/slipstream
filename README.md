@@ -338,6 +338,16 @@ the per-process memory readout.
   whole claim is a memory number, parsing and JITing 52,000 lines at every launch is not a neutral
   default.
 - **TypeScript 6 removed `baseUrl`.** Path aliases have to be relative now: `["./src/shared/*"]`.
+- **`electron-vite dev` does not watch main or preload without `--watch`.** The renderer
+  hot-reloads either way, so the app looks alive while main and the preload script sit at whatever
+  they were when it launched. The failure is nasty precisely because it is half-working: the
+  renderer had hot-reloaded to code calling `window.slipstream.auth`, against a preload built
+  before auth existed. `npm run dev` passes `--watch`; do not remove it.
+- **Remote debugging works, and is on in dev.** `app.commandLine.appendSwitch('remote-debugging-port', …)`
+  is honoured, contrary to what an earlier commit message here claims — the one time it failed, the
+  socket bind was refused (`WSAEACCES`) by an instance killed seconds earlier, not ignored. Point
+  CDP at `127.0.0.1:9222` to drive the real UI, which is the only way to exercise anything behind
+  the preload bridge.
 - **If `electron-v*.zip` downloads at 0 B/s**, the release asset CDN is unreachable, not the
   network. Point Electron at a mirror:
   ```

@@ -24,6 +24,16 @@ const isDev = !app.isPackaged
 // ambush you with sound; here the user pressed Watch, which IS the gesture.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
+/**
+ * Dev only, loopback only. Lets the real UI be driven over CDP, which is the
+ * only way to check behaviour that a browser tab cannot reach - anything behind
+ * the preload bridge. If the port is taken the devtools server simply does not
+ * start; it is a convenience, so it must never stop the app launching.
+ */
+if (!app.isPackaged) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.SLIPSTREAM_DEBUG_PORT ?? '9222')
+}
+
 /** Colours here must track --bg / --text in the renderer's tokens.css. */
 const TITLEBAR = { color: '#0B0B0F', symbolColor: '#9A9AA8', height: 40 }
 
