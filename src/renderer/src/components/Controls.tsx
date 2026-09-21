@@ -1,33 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import type { QualityLevel } from '@/player/hls'
-import { ChatBubble, Gauge, Layers, Live, Pause, Play, Volume, VolumeOff } from './Icons'
+import { Layers, Pause, Play, Volume, VolumeOff } from './Icons'
+import { DvrBar } from './DvrBar'
 
 interface Props {
   ready: boolean
   playing: boolean
   onPlayPause: () => void
   onSeek: (delta: number) => void
-  behind: number
+  /** The scrubbable window, in media seconds. */
+  dvr: { start: number; end: number; current: number }
+  onSeekTo: (time: number) => void
   onJumpLive: () => void
   volume: number
   muted: boolean
   onVolume: (v: number) => void
   onToggleMute: () => void
   levels: QualityLevel[]
-  currentLevel: number
-  onLevel: (index: number) => void
-  chatVisible: boolean
-  onToggleChat: () => void
-  hudVisible: boolean
-  onToggleHud: () => void
-}
-
-/** Under five seconds is as live as HLS gets; do not pretend to more precision. */
-function formatBehind(seconds: number): string {
-  if (seconds < 5) return 'LIVE'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `-${m}:${String(s).padStart(2, '0')}`
+  /** What the viewer asked for. null means "let ABR decide". */
+  pinnedLabel: string | null
+  /** What hls.js is actually playing right now, which ABR may keep changing. */
+  activeLevel: number
+  onPick: (label: string | null) => void
 }
 
 export function Controls(props: Props): React.JSX.Element {
@@ -43,8 +37,12 @@ export function Controls(props: Props): React.JSX.Element {
     return () => document.removeEventListener('mousedown', close)
   }, [menu])
 
-  const active = props.levels.find((l) => l.index === props.currentLevel)
-  const behindLive = props.behind >= 5
+  const active = props.levels.find((l) => l.index === props.activeLevel)
+  const behindLive = props.dvr.end - props.dvr.current >= 5
+
+  // Auto has to say what it actually picked, or it looks like the control is
+  // being ignored: the label would read "720p60" while ABR quietly moved you.
+  const qualityLabel = props.pinnedLabel ?? (active ? `Auto · ${active.label}` : 'Auto')
 
   return (
     <div className="controls">
@@ -57,12 +55,7 @@ export function Controls(props: Props): React.JSX.Element {
         {props.playing ? <Pause /> : <Play />}
       </button>
 
-      <button
-        className="ctl"
-        onClick={() => props.onSeek(-10)}
-        disabled={!props.ready}
-        title="Back 10s  (Left)"
-      >
+      <button className="ctl" onClick={() => props.onSeek(-10)} disabled={!props.ready} title="Back 10s  (Left)">
         &minus;10s
       </button>
       <button
@@ -74,17 +67,15 @@ export function Controls(props: Props): React.JSX.Element {
         +10s
       </button>
 
-      <button
-        className={`ctl behind ${behindLive ? 'is-behind' : ''}`}
-        onClick={props.onJumpLive}
-        disabled={!props.ready || !behindLive}
-        title="Jump to the live edge  (L)"
-      >
-        {behindLive ? <Live size={13} /> : null}
-        {props.ready ? formatBehind(props.behind) : '--:--'}
-      </button>
+      <DvrBar
+        start={props.dvr.start}
+        end={props.dvr.end}
+        current={props.dvr.current}
+        disabled={!props.ready}
+        onSeek={props.onSeekTo}
+        onJumpLive={props.onJumpLive}
+      />
 
-      <div className="spacer" />
 
       <div className="volume">
         <button className="ctl" onClick={props.onToggleMute} title="Mute  (M)">
@@ -103,24 +94,25 @@ export function Controls(props: Props): React.JSX.Element {
 
       <div className="menu-anchor" ref={anchor}>
         <button
-          className="ctl"
+          className={`ctl ${props.pinnedLabel ? 'is-pinned' : ''}`}
           onClick={() => setMenu((v) => !v)}
           disabled={!props.levels.length}
           title="Quality"
         >
           <Layers />
-          {active ? active.label : 'auto'}
+          {qualityLabel}
         </button>
         {menu && (
           <div className="menu" role="menu">
             <button
-              className={`menu-item ${props.currentLevel === -1 ? 'is-active' : ''}`}
+              className={`menu-item ${props.pinnedLabel === null ? 'is-active' : ''}`}
               onClick={() => {
-                props.onLevel(-1)
+                props.onPick(null)
                 setMenu(false)
               }}
             >
-              Auto
+              <span>Auto</span>
+              {active && <span className="hint">{active.label}</span>}
             </button>
             <div className="menu-sep" />
             {props.levels
@@ -129,9 +121,9 @@ export function Controls(props: Props): React.JSX.Element {
               .map((l) => (
                 <button
                   key={l.index}
-                  className={`menu-item ${l.index === props.currentLevel ? 'is-active' : ''}`}
+                  className={`menu-item ${l.label === props.pinnedLabel ? 'is-active' : ''}`}
                   onClick={() => {
-                    props.onLevel(l.index)
+                    props.onPick(l.label)
                     setMenu(false)
                   }}
                 >
@@ -143,23 +135,6 @@ export function Controls(props: Props): React.JSX.Element {
         )}
       </div>
 
-      <button
-        className={`ctl ${props.hudVisible ? 'is-active' : ''}`}
-        onClick={props.onToggleHud}
-        title="Memory readout  (F2)"
-        style={props.hudVisible ? { color: 'var(--accent)' } : undefined}
-      >
-        <Gauge />
-      </button>
-
-      <button
-        className="ctl"
-        onClick={props.onToggleChat}
-        title="Toggle chat  (C)"
-        style={props.chatVisible ? { color: 'var(--text)' } : undefined}
-      >
-        <ChatBubble />
-      </button>
     </div>
   )
 }

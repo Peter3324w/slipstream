@@ -136,6 +136,27 @@ export class Player {
     return Math.max(0, seekable.end(seekable.length - 1) - this.video.currentTime)
   }
 
+  /**
+   * The scrubbable window: everything still held in the SourceBuffer.
+   *
+   * `start` is not zero and does not stay put - hls.js trims to backBufferLength,
+   * so the floor crawls forward as the stream runs. The bar has to be drawn
+   * against this moving window, not against a fixed duration.
+   */
+  seekableWindow(): { start: number; end: number; current: number } {
+    const s = this.video.seekable
+    const b = this.video.buffered
+    const start = s.length ? s.start(0) : b.length ? b.start(0) : 0
+    const end = s.length ? s.end(s.length - 1) : b.length ? b.end(b.length - 1) : 0
+    return { start, end, current: this.video.currentTime }
+  }
+
+  seekTo(time: number): void {
+    const { start, end } = this.seekableWindow()
+    // Clamp inside the window; seeking past the live edge stalls the demuxer.
+    this.video.currentTime = Math.min(end, Math.max(start, time))
+  }
+
   /** Seconds of rewind actually buffered behind the playhead. */
   rewindAvailable(): number {
     const b = this.video.buffered

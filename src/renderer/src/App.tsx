@@ -7,6 +7,7 @@ import { ChatList } from './chat/messageList'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
 import { MemoryHud } from './components/MemoryHud'
+import { ChatBubble, Gauge } from './components/Icons'
 import { Placeholder } from './components/Placeholder'
 
 type Phase =
@@ -16,6 +17,7 @@ type Phase =
   | { kind: 'error'; reason: ResolveFailure; message: string }
 
 const VOLUME_KEY = 'slipstream.volume'
+const QUALITY_KEY = 'slipstream.quality'
 
 /**
  * Main's own caps add up to about 53s (30s streamlink + 15s manifest + 8s liveness),
@@ -65,9 +67,19 @@ export default function App(): React.JSX.Element {
   const [channel, setChannel] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [levels, setLevels] = useState<QualityLevel[]>([])
-  const [currentLevel, setCurrentLevel] = useState(-1)
+  /** What hls.js is actually playing. Under ABR this moves on its own. */
+  const [activeLevel, setActiveLevel] = useState(-1)
+  /**
+   * What the viewer asked for, as a label rather than an index, because level
+   * indices are per-manifest and mean nothing on the next channel. null = Auto.
+   */
+  const [pinnedLabel, setPinnedLabel] = useState<string | null>(() =>
+    localStorage.getItem(QUALITY_KEY)
+  )
+  const pinnedRef = useRef<string | null>(pinnedLabel)
   const [playing, setPlaying] = useState(false)
-  const [behind, setBehind] = useState(0)
+  /** The scrubbable window. Polled, because MSE has no event for it moving. */
+  const [dvr, setDvr] = useState({ start: 0, end: 0, current: 0 })
   const [volume, setVolume] = useState(() => Number(localStorage.getItem(VOLUME_KEY) ?? 0.6))
   const [muted, setMuted] = useState(false)
   const [chatState, setChatState] = useState<ChatState>('idle')
@@ -182,9 +194,14 @@ export default function App(): React.JSX.Element {
     const player = new Player(video, {
       onLevels: (next) => {
         setLevels(next)
-        setCurrentLevel(-1)
+        // Re-apply a remembered choice on every new stream. Matching on the label
+        // is the point: "720p60" survives a channel change, index 2 does not.
+        const wanted = pinnedRef.current
+        const match = wanted ? next.find((l) => l.label === wanted) : undefined
+        if (match) player.setLevel(match.index)
+        else if (wanted) setPinnedLabel(null) // this channel does not offer it
       },
-      onLevelSwitch: setCurrentLevel,
+      onLevelSwitch: setActiveLevel,
       onError: (message) => setPhase({ kind: 'error', reason: 'error', message }),
       onStale: () => void refresh()
     })
@@ -222,12 +239,51 @@ export default function App(): React.JSX.Element {
     localStorage.setItem(VOLUME_KEY, String(volume))
   }, [volume, muted])
 
-  // How far behind the live edge we are, for the DVR readout.
+  // The buffer's floor and the live edge both move on their own, and MSE fires
+  // no event when they do, so the bar has to be driven by polling. timeupdate
+  // alone is too coarse (~4Hz, and it stops while paused).
   useEffect(() => {
     if (phase.kind !== 'playing') return
-    const id = setInterval(() => setBehind(playerRef.current?.behindLive() ?? 0), 1000)
-    return () => clearInterval(id)
+    const video = videoRef.current
+    const tick = (): void => {
+      const window = playerRef.current?.seekableWindow()
+      if (window) setDvr(window)
+    }
+    tick()
+    const id = setInterval(tick, 250)
+    video?.addEventListener('timeupdate', tick)
+    return () => {
+      clearInterval(id)
+      video?.removeEventListener('timeupdate', tick)
+    }
   }, [phase.kind])
+
+  useEffect(() => {
+    pinnedRef.current = pinnedLabel
+  }, [pinnedLabel])
+
+  /**
+   * Keep titlebar content clear of the native minimise/maximise/close buttons.
+   *
+   * The CSS env(titlebar-area-*) variables would do this, but they only exist
+   * where Window Controls Overlay is active - so the layout silently differs
+   * between the app and a browser tab. Reading the rect directly works in both,
+   * and geometrychange fires on maximise/restore, when the reserved width moves.
+   */
+  useEffect(() => {
+    const wco = (navigator as Navigator & { windowControlsOverlay?: WindowControlsOverlay })
+      .windowControlsOverlay
+    if (!wco) return
+
+    const apply = (): void => {
+      const rect = wco.getTitlebarAreaRect()
+      const inset = Math.max(0, window.innerWidth - (rect.x + rect.width))
+      document.documentElement.style.setProperty('--titlebar-inset-right', `${inset + 8}px`)
+    }
+    apply()
+    wco.addEventListener('geometrychange', apply)
+    return () => wco.removeEventListener('geometrychange', apply)
+  }, [])
 
   useEffect(() => {
     document.title = phase.kind === 'playing' ? `${phase.stream.channel.author} - Slipstream` : 'Slipstream'
@@ -249,16 +305,26 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.target instanceof HTMLInputElement) return
+      const target = e.target as HTMLElement | null
+      // Only bail for real text entry. Bailing for every input meant that once
+      // you touched the volume slider, every shortcut silently stopped working.
+      const typing =
+        (target instanceof HTMLInputElement && target.type !== 'range') ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable === true
+      if (typing) return
+
       switch (e.key.toLowerCase()) {
         case ' ':
           e.preventDefault()
           togglePlay()
           break
         case 'arrowleft':
+          e.preventDefault()
           seek(-10)
           break
         case 'arrowright':
+          e.preventDefault()
           seek(10)
           break
         case 'l':
@@ -321,6 +387,24 @@ export default function App(): React.JSX.Element {
             </span>
           </div>
         )}
+
+        <div className="titlebar-actions">
+          <button
+            className={`ctl ${hudVisible ? 'is-pinned' : ''}`}
+            onClick={() => setHudVisible((v) => !v)}
+            title="Memory readout  (F2)"
+          >
+            <Gauge />
+          </button>
+          <button
+            className={`ctl ${chatVisible ? 'is-on' : 'is-off'}`}
+            onClick={() => setChatVisible((v) => !v)}
+            title={chatVisible ? 'Hide chat  (C)' : 'Show chat  (C)'}
+          >
+            <ChatBubble />
+            {!chatVisible && <span style={{ fontSize: 11 }}>chat</span>}
+          </button>
+        </div>
       </header>
 
       <main className="stage">
@@ -346,7 +430,8 @@ export default function App(): React.JSX.Element {
           playing={playing}
           onPlayPause={togglePlay}
           onSeek={seek}
-          behind={behind}
+          dvr={dvr}
+          onSeekTo={(time) => playerRef.current?.seekTo(time)}
           onJumpLive={() => playerRef.current?.seekToLive()}
           volume={volume}
           muted={muted}
@@ -356,15 +441,20 @@ export default function App(): React.JSX.Element {
           }}
           onToggleMute={() => setMuted((v) => !v)}
           levels={levels}
-          currentLevel={currentLevel}
-          onLevel={(index) => {
-            playerRef.current?.setLevel(index)
-            setCurrentLevel(index)
+          pinnedLabel={pinnedLabel}
+          activeLevel={activeLevel}
+          onPick={(label) => {
+            pinnedRef.current = label
+            setPinnedLabel(label)
+            if (label === null) {
+              localStorage.removeItem(QUALITY_KEY)
+              playerRef.current?.setLevel(-1)
+            } else {
+              localStorage.setItem(QUALITY_KEY, label)
+              const match = levels.find((l) => l.label === label)
+              if (match) playerRef.current?.setLevel(match.index)
+            }
           }}
-          chatVisible={chatVisible}
-          onToggleChat={() => setChatVisible((v) => !v)}
-          hudVisible={hudVisible}
-          onToggleHud={() => setHudVisible((v) => !v)}
         />
       </main>
 

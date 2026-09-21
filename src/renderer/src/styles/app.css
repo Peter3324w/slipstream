@@ -331,3 +331,135 @@ input { font: inherit; color: inherit; }
 .hud-total { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); color: var(--text); }
 .hud-total.over { color: var(--live); }
 .hud-total.under { color: var(--good); }
+
+/* A control that is currently doing something, vs one that is switched off. */
+.ctl.is-on { color: var(--text); }
+.ctl.is-pinned { color: var(--accent); }
+.ctl.is-off { color: var(--text-faint); }
+.ctl.is-off:hover { color: var(--text); }
+
+/*
+ * Layout toggles live in the titlebar, not the control bar.
+ *
+ * They used to sit at the right of the controls, which are inside the video
+ * pane - so hiding chat widened the pane and threw the chat button 327px to
+ * the right (measured). Clicking the same spot again opened the quality menu
+ * instead, and chat looked like it could not be brought back. The titlebar
+ * spans the window, so these never move.
+ */
+.titlebar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+/*
+ * Keep clear of the native minimise/maximise/close overlay. env() resolves to
+ * the width Electron leaves us; the fallback collapses the calc to a plain 8px.
+ */
+.titlebar {
+  /* App.tsx sets the variable from the real overlay rect; env() covers the case
+     where it has not run yet, and 8px covers a plain browser with no overlay. */
+  padding-right: var(--titlebar-inset-right, calc(100% - env(titlebar-area-width, 100%) + 8px));
+}
+
+/* ------------------------------------------------------------- DVR bar */
+
+.dvr {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.dvr-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: none;
+}
+
+.dvr-live {
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.dvr-live:not(:disabled) { color: var(--accent); }
+.dvr-live:not(:disabled):hover { background: var(--accent-wash); }
+.dvr-live.is-live { color: var(--live); letter-spacing: 0.06em; font-weight: 700; }
+.dvr-live:disabled { cursor: default; }
+
+.dvr-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+}
+/* The visible rail. The 16px box above it is the hit target - a 4px bar is
+   miserable to grab, which is the whole complaint about -10/+10 buttons. */
+.dvr-track::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  transition: height 0.12s var(--ease);
+}
+.dvr-track:hover::before,
+.dvr-track.is-dragging::before { height: 6px; }
+
+.dvr-fill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--text);
+  pointer-events: none;
+  transition: height 0.12s var(--ease);
+}
+.dvr-track:hover .dvr-fill,
+.dvr-track.is-dragging .dvr-fill { height: 6px; }
+
+.dvr-thumb {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 99px;
+  background: #fff;
+  transform: translate(-50%, 0);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease), transform 0.12s var(--ease);
+}
+.dvr-track:hover .dvr-thumb,
+.dvr-track.is-dragging .dvr-thumb { opacity: 1; }
+.dvr-track.is-dragging .dvr-thumb { transform: translate(-50%, 0) scale(1.15); }
+
+.dvr-bubble {
+  position: absolute;
+  bottom: 20px;
+  transform: translateX(-50%);
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dvr.is-disabled { opacity: 0.4; }
+.dvr.is-disabled .dvr-track { cursor: default; }
