@@ -41,37 +41,67 @@ Under 300MB resident with video and chat running. Roughly a **7x** reduction. Me
 
 `streamlink` does the hard part: Twitch's access-token dance and HLS playlist resolution. That is the piece not worth reimplementing. Everything downstream is ours.
 
-Two candidate playback paths. **This is the main open question and should be prototyped before committing.**
+**v1 is Path A — hls.js into a plain `<video>`.** Decided 2026-09-21. Path B is not dead; it is
+gated on the seek probe in [`probe/`](probe/). See the open questions.
 
-### Path A — hls.js + `<video>`
+### How playback is wired
 
 ```
-streamlink --stream-url twitch.tv/<channel> best   ->  raw .m3u8 URL
-                        |
-             hls.js  ->  <video>  in the app window
-                        |
-                Chromium hardware-decodes
+streamlink --json twitch.tv/<channel>            (main process)
+        |
+        +-- metadata: id, author, title, category
+        +-- streams[*].master : the usher master playlist URL
+                 |
+        main fetches the master body              <- Node, so no CORS
+                 |
+        renderer wraps it in a Blob  ->  hls.js  ->  <video>
+                                                        |
+                                            Chromium hardware-decodes
 ```
 
-- **Pro:** no window embedding. Chat is HTML beside the video, overlays and layout just work.
-- **Con:** the back buffer lives in MSE SourceBuffers, i.e. **in RAM**, and Chromium enforces a quota that throws `QuotaExceededError` well before an hour of rewind. No disk-spill equivalent exists.
+**Why the master crosses the IPC boundary as text and not as a URL.** Measured against a live
+channel, 2026-09-21:
 
-### Path B — mpv, embedded
+| | `access-control-allow-origin` |
+|---|---|
+| `usher.ttvnw.net` — master playlist | **absent** |
+| `*.playlist.ttvnw.net` — media playlists | `*` |
+| `*.hls.ttvnw.net` — segments | `*` |
+
+So the renderer cannot fetch the master, but it can fetch everything the master points at. And
+every URI inside a Twitch manifest is absolute, so there is no base-URL to resolve against. Main
+fetches the manifest once and passes the body; hls.js loads it from a Blob and every request after
+that goes direct. No proxy, no rewriting of security headers, no custom protocol handler.
+
+**Why Electron and not Tauri.** Tauri's headline win is binary size. Its WebView2 runtime is still
+a Chromium renderer, so the memory difference is perhaps 50MB — not the difference between passing
+and failing a 300MB target. Electron is also the stack PlayTime already holds ~100MB on.
+
+### What Path A costs
+
+The back buffer lives in MSE SourceBuffers, in RAM, under a Chromium quota. `BACK_BUFFER_SECONDS`
+is 120 — roughly two minutes of rewind. Enough to scrub back over a teamfight. **Not** enough to
+sit out a three-minute ad break, which is exactly why Path B still matters.
+
+### Path B — mpv, embedded (deferred)
 
 ```
 streamlink ... -o -   ->   mpv (--wid=<HWND> from getNativeWindowHandle())
 ```
 
-- **Pro:** a real DVR. `--cache-on-disk=yes` puts the rewind buffer on disk instead of RAM, which is the whole ballgame on an 11.9GB machine.
-- **Con:** mpv renders to its own surface, so HTML will not composite above the video. Overlays get awkward. Control it over IPC (`--input-ipc-server`, a named pipe on Windows).
+- **Pro:** a real DVR. `--cache-on-disk=yes` puts the rewind buffer on disk instead of RAM, which
+  is the whole ballgame on an 11.9GB machine — and it is what makes ad-skipping possible at all.
+- **Con:** mpv renders to its own surface, so HTML will not composite above the video. The video
+  region needs its own frameless window, which means a second renderer process for a pane that
+  draws nothing. Control it over IPC (`--input-ipc-server`, a named pipe on Windows).
 
-**Current lean: B, if rewind stays a priority.** The disk-backed buffer is a capability Path A structurally cannot match. Prototype both.
 
 ---
 
 ## Rewind / DVR
 
-Worth its own section, because it drives the architecture choice and solves a second problem for free.
+Worth its own section, because it solves a second problem for free. **Everything below describes
+Path B** — it is what a disk-backed buffer buys. Path A's rewind is the two minutes noted above.
 
 `--demuxer-max-back-bytes` *is* the rewind buffer. Verified present in mpv `v0.41.0-244-gaf9c81fa1`:
 
@@ -130,12 +160,16 @@ Detect ad boundaries via the HLS `#EXT-X-DATERANGE` tag carrying `CLASS="twitch-
 
 ### v1 — prove the thesis
 
-- [ ] Channel input, quality picker (`streamlink --json <url>` returns every quality)
-- [ ] Playback via the chosen path
-- [ ] **Anonymous chat**, read-only — no auth required at all
-- [ ] Measure RAM against the baseline above
+- [x] Channel input and quality picker, both from a single `streamlink --json` call
+- [x] Playback through hls.js
+- [x] **Anonymous chat**, read-only — a `justinfan` nick needs no account
+- [x] First-party emotes — the IRC `emotes` tag carries id and range, so this came almost free
+- [x] Per-process memory readout in-app (`F2`), because one summary number is exactly what hid the
+      problem in the browser
+- [ ] **Run it against a long live session and write the number down**
 
-Deliberately no login, no emotes. v1 exists to answer one question: does this actually come in under 300MB?
+Still deliberately no login and no third-party emotes. v1 exists to answer one question: does this
+actually come in under 300MB?
 
 ### v2 — make it a real client
 
@@ -209,6 +243,38 @@ winget install --id shinchiro.mpv --source winget
 
 ---
 
+## Development
+
+```
+npm install
+npm run dev        # electron-vite: HMR for the renderer, auto-restart for main
+npm run build      # typecheck both projects, then bundle to out/
+npm run typecheck
+```
+
+Requires Node 22+ (Electron 44's floor) and streamlink on PATH. Press `F2` in the running app for
+the per-process memory readout.
+
+### Toolchain gotchas, learned the hard way
+
+- **Electron 44 has no postinstall.** It downloads its binary lazily on first use, so a clean
+  `npm install` finishing successfully does not mean you can run anything yet.
+- **npm 11 blocks install scripts by default.** `npm approve-scripts <pkg>` is now a required step;
+  esbuild silently has no binary otherwise.
+- **electron-vite does not minify.** The renderer bundle was 1,957kB of readable, commented
+  JavaScript until `build.minify` was set explicitly — 613kB after, with hls.js on its `light`
+  build (no DRM, no subtitles, no alternate audio; Twitch needs none of them). For a project whose
+  whole claim is a memory number, parsing and JITing 52,000 lines at every launch is not a neutral
+  default.
+- **TypeScript 6 removed `baseUrl`.** Path aliases have to be relative now: `["./src/shared/*"]`.
+- **If `electron-v*.zip` downloads at 0 B/s**, the release asset CDN is unreachable, not the
+  network. Point Electron at a mirror:
+  ```
+  set "ELECTRON_MIRROR=https://registry.npmmirror.com/-/binary/electron/"
+  set "ELECTRON_CUSTOM_DIR={{ version }}"
+  ```
+
+
 ## Chat protocol
 
 Twitch IRC over WebSocket. **Reading requires no authentication:**
@@ -236,13 +302,16 @@ Chatterino + streamlink *is* the lightweight Twitch setup people already run. **
 
 ## Open questions
 
-1. Path A or Path B — does `<video>` playback come close enough on RAM to be worth avoiding mpv embedding?
-2. How badly does `--wid` embedding constrain overlays in practice?
+1. ~~Path A or Path B?~~ **Path A for v1**, decided on CORS behaviour and process count rather
+   than on a measurement — a second frameless window for mpv would add a renderer process that
+   draws nothing. The RAM number itself is still unmeasured, so this is a decision, not an answer.
+2. How badly does `--wid` embedding constrain overlays in practice? (Path B only.)
 3. Does `--cache-on-disk` hold up over a multi-hour session, or does the cache file grow unbounded?
 4. Does seeking forward past a stitched mid-roll actually work, or does the demuxer stall at
    the ad boundary? **The whole ad strategy rests on this.** Instrumented in [`probe/`](probe/)
    — run that before writing any application code.
-5. Electron (known, PlayTime patterns reusable) or Tauri (WebView2, far smaller footprint, Rust backend)? Electron ships faster; Tauri better serves the stated goal.
+5. ~~Electron or Tauri?~~ **Electron.** Tauri's footprint claim is mostly about binary size;
+   WebView2 is still a Chromium renderer. Revisit only if the measured number misses badly.
 
 ---
 
