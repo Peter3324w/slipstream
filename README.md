@@ -285,7 +285,13 @@ NICK justinfan12345        # any justinfan + digits; anonymous, read-only
 JOIN #<channel>
 ```
 
-Sending uses the same socket with an OAuth token and `chat:edit`. Request the `tags` capability for badges, colours and emote positions. *(Unverified in-session.)*
+Sending uses the same socket with an OAuth token and `chat:edit`. Request the `tags` capability for
+badges, colours and emote positions.
+
+*Verified 2026-09-21* against a live channel: the anonymous join works, and the `emotes` tag gives
+`id:start-end` ranges that resolve to `static-cdn.jtvnw.net/emoticons/v2/<id>/default/dark/1.0`.
+**The ranges are code point offsets, not UTF-16 indices** — index the string directly and every
+message containing an emoji renders its emotes in the wrong place.
 
 ---
 

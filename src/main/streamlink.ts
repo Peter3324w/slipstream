@@ -4,6 +4,7 @@ import { join, delimiter } from 'node:path'
 import { promisify } from 'node:util'
 import type { ResolveResult, ResolvedStream } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
+import { channelExistence } from './twitch'
 
 const run = promisify(execFile)
 
@@ -69,12 +70,30 @@ interface StreamlinkJson {
   streams?: Record<string, StreamlinkStream>
 }
 
-function classify(message: string): ResolveResult & { ok: false } {
+/**
+ * streamlink says "No playable streams found on this URL" for an offline channel
+ * AND for one that does not exist, so that one message has to be disambiguated
+ * elsewhere. If the lookup cannot answer, we say so rather than guessing.
+ */
+async function classify(message: string, login: string): Promise<ResolveResult & { ok: false }> {
   const m = message.toLowerCase()
-  if (m.includes('no playable streams'))
-    return { ok: false, reason: 'offline', message: 'That channel is not live right now.' }
-  if (m.includes('unable to find channel') || m.includes('404'))
-    return { ok: false, reason: 'not_found', message: 'No such channel.' }
+
+  if (m.includes('no playable streams') || m.includes('unable to find channel') || m.includes('404')) {
+    switch (await channelExistence(login)) {
+      case 'missing':
+        return { ok: false, reason: 'not_found', message: `There is no channel called "${login}".` }
+      case 'live':
+      case 'offline':
+        return { ok: false, reason: 'offline', message: `${login} is not live right now.` }
+      default:
+        return {
+          ok: false,
+          reason: 'offline',
+          message: `${login} is not live right now - or there is no such channel.`
+        }
+    }
+  }
+
   return { ok: false, reason: 'error', message }
 }
 
@@ -110,14 +129,14 @@ export async function resolveChannel(input: string): Promise<ResolveResult> {
       try {
         parsed = JSON.parse(stdout)
       } catch {
-        return classify(String((err as Error).message))
+        return classify(String((err as Error).message), login)
       }
     } else {
-      return classify(String((err as Error).message))
+      return classify(String((err as Error).message), login)
     }
   }
 
-  if (parsed.error) return classify(parsed.error)
+  if (parsed.error) return classify(parsed.error, login)
 
   const streams = parsed.streams ?? {}
   // Every entry carries the same master URL; take the first that has one.
