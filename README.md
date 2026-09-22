@@ -2,7 +2,75 @@
 
 A lightweight desktop Twitch client. Video and chat in one window, without the web app's overhead.
 
-Wraps [streamlink](https://streamlink.github.io/) for stream resolution and [mpv](https://mpv.io/) for playback. Not affiliated with, endorsed by, or connected to Twitch Interactive, Inc.
+**291 MB across 4 processes**, against 2.06 GB across 14 for the same stream in a browser tab.
+
+Wraps [streamlink](https://streamlink.github.io/) for stream resolution and plays it with
+[hls.js](https://github.com/video-dev/hls.js). Not affiliated with, endorsed by, or connected to
+Twitch Interactive, Inc.
+
+---
+
+## What it does
+
+**Watch**
+- Any channel by name or pasted `twitch.tv` link
+- Quality picker built from the channel's own manifest — Twitch's rendition names vary per channel,
+  so they are read, never assumed
+- Pin a quality and it sticks across channels. Auto says what it actually picked (`Auto · 720p60`)
+  rather than showing a number it is about to change
+- A DVR scrub bar across the rewind buffer, plus ±10s and jump-to-live
+
+**Chat**
+- Read-only, **no account needed** — anonymous IRC
+- Twitch's own emotes, plus **7TV, BTTV and FFZ**, each switchable on its own
+- **Hide** chat (off screen, socket alive) is different from **Close** (socket dropped, message
+  nodes freed, nothing downloaded)
+- The header shows bytes received, so the cost of leaving emotes on is a number rather than a claim
+
+**Favourites**
+- A local list with live status, viewer count and category — **no login required**
+- Live channels first by audience; a mistyped name reads *Unknown channel* instead of sitting there
+  looking offline forever
+
+**Ads**
+- Pre-rolls never fire, because the app never loads twitch.tv's JavaScript
+- Mid-rolls are stitched into the stream server-side and still play. See [Ads](#ads) — the project
+  does not pretend otherwise
+
+**Measuring**
+- `F2` shows per-process resident memory against the 300MB target, because a single summary number
+  is exactly what hid the problem in the browser
+
+**Optional sign-in** — only needed to *send* chat messages, and can be put away entirely.
+
+---
+
+## Install
+
+**Requires [streamlink](https://streamlink.github.io/) on `PATH`** — it does the stream resolution:
+
+```
+winget install --id Streamlink.Streamlink --source winget
+```
+
+Then run `Slipstream Setup 0.1.0.exe` from [Releases](../../releases) (per-user, no admin prompt),
+or build it yourself with `npm run dist` — see [Development](#development).
+
+> Windows SmartScreen will say *"Windows protected your PC"* because the build is not code-signed.
+> **More info → Run anyway.** Signing needs a certificate; see
+> [the note on code signing](#gotchas-learned-the-hard-way).
+
+### Keyboard
+
+| | |
+|---|---|
+| `Space` | play / pause |
+| `←` `→` | seek ∓10s |
+| `L` | jump to the live edge |
+| `M` | mute |
+| `C` | show / hide chat |
+| `B` | show / hide favourites |
+| `F2` | per-process memory readout |
 
 ---
 
@@ -171,10 +239,13 @@ Detect ad boundaries via the HLS `#EXT-X-DATERANGE` tag carrying `CLASS="twitch-
       and frees the message nodes. The header shows bytes received, so the difference is a number
       rather than a claim. Closed is remembered across restarts, because it is a choice about data
       — and reconnecting starts from an empty log, since Twitch sends no backlog
-- [ ] **Run it against a long live session and write the number down**
+- [x] Measure it. **290.9MB idle across 4 processes** in a packaged build — see
+      [Measured](#measured)
+- [ ] **Measure it again under a long live session, with video and chat running.** Idle is not the
+      target, and a renderer that leaks over four hours is exactly what this project was a reaction
+      to
 
-Still deliberately no login and no third-party emotes. v1 exists to answer one question: does this
-actually come in under 300MB?
+v1 asked one question — does this come in under 300MB? Idle, yes. Under load, unmeasured.
 
 ### v2 — make it a real client
 
@@ -183,7 +254,8 @@ actually come in under 300MB?
       needs no account at all. This is what makes it feel like a client rather than a launcher
 - [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
-- [ ] DVR controls: scrub bar, configurable buffer, ad-skip
+- [x] DVR scrub bar across the rewind buffer, with jump-to-live
+- [ ] Configurable buffer length, and ad-skip — both gated on the seek probe below
 
 ### Later
 
