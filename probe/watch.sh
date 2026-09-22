@@ -11,7 +11,10 @@ for f in "$DIR"/*.log; do
   pid=$(ps -eo pid,args | awk -v n="$name" '$2 ~ /python3/ && index($0, n) && /playlist_probe/ {print $1; exit}')
   up=$([ -n "$pid" ] && ps -o etime= -p "$pid" | tr -d ' ' || echo "stopped")
   prog=$(grep -E '^\[.*\] \.\.\.' "$f" 2>/dev/null | tail -1 | sed 's/.*\.\.\. //')
-  hits=$(grep -cE 'AD BREAK START|AD MARKER|DISCONTINUITY|CUE-OUT|SCTE35' "$f" 2>/dev/null || echo 0)
+  # grep -c already prints 0 when it finds nothing, and exits 1 doing so;
+  # an `|| echo 0` on top of that yields the count twice.
+  hits=$(grep -cE 'AD BREAK START|AD MARKER|DISCONTINUITY|CUE-OUT|SCTE35' "$f" 2>/dev/null) || true
+  hits=${hits:-0}
   printf '%-22s %-10s %-34s %s\n' "$name" "$up" "${prog:-starting}" "$hits"
 done
 
