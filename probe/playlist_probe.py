@@ -35,6 +35,8 @@ BORING = {
     "EXT-X-MEDIA-SEQUENCE", "EXT-X-PROGRAM-DATE-TIME", "EXT-X-ENDLIST",
     "EXT-X-TWITCH-ELAPSED-SECS", "EXT-X-TWITCH-TOTAL-SECS",
     "EXT-X-TWITCH-LIVE-SEQUENCE", "EXT-X-TWITCH-INFO",
+    # Low-latency prefetch hint. Appears on every poll and means nothing here.
+    "EXT-X-TWITCH-PREFETCH",
 }
 
 # Tags that plausibly delimit an ad break. We flag all of them and let the
@@ -160,6 +162,7 @@ def main():
     ad_started = None
     polls = 0
     discontinuities = 0
+    seen_dateranges: set[str] = set()
 
     while True:
         try:
@@ -209,6 +212,12 @@ def main():
 
             elif name == "EXT-X-DATERANGE":
                 cls = a.get("CLASS", "")
+                # Twitch's session/timestamp ranges carry END-ON-NEXT=YES and so
+                # reappear in every single playlist. Reporting them each poll
+                # buries the one range that matters under thousands of lines.
+                if attrs in seen_dateranges:
+                    continue
+                seen_dateranges.add(attrs)
                 emit("daterange", **a)
                 looks_like_ad = "ad" in cls.lower() or "AD" in a.get("ID", "").upper()
                 mark = "AD MARKER" if looks_like_ad else "daterange"
