@@ -8,9 +8,11 @@ secrets.json
 # dependencies / build
 node_modules/
 dist/
-build/
 out/
 release/
+# NOT build/ — that is electron-builder's buildResources, i.e. the app icon.
+# It is a source asset; ignoring it means a fresh clone packages with Electron's
+# default icon and nobody notices until someone looks at the taskbar.
 *.tsbuildinfo
 
 # streamlink/mpv runtime artefacts

@@ -1,0 +1,31 @@
+appId: com.slipstream.app
+productName: Slipstream
+copyright: Slipstream. Not affiliated with Twitch Interactive, Inc.
+
+directories:
+  buildResources: build
+  output: release
+
+# out/ is the electron-vite bundle; nothing else needs to ship.
+files:
+  - out/**/*
+  - package.json
+
+# Use the Electron already extracted into node_modules rather than making
+# electron-builder fetch its own copy. The release-asset CDN is unroutable on
+# this connection (see the README), and it saves 150MB on a full disk.
+electronDist: node_modules/electron/dist
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: dir
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Slipstream

@@ -30,6 +30,14 @@ import {
 const __dirname_ = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
 
+/**
+ * Windows groups taskbar buttons and attributes notifications by this id. Without
+ * it an unpackaged run is just "electron.exe", which is also why the dev window
+ * shows Electron's own icon.
+ */
+const APP_ID = 'com.slipstream.app'
+app.setAppUserModelId(APP_ID)
+
 // This is a video player. Chromium's gesture requirement exists for web pages that
 // ambush you with sound; here the user pressed Watch, which IS the gesture.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -56,6 +64,9 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: TITLEBAR.color,
     title: 'Slipstream',
+    // A packaged build takes its taskbar icon from the .exe itself; this is
+    // what gives the dev run the same one instead of Electron's default.
+    ...(isDev ? { icon: join(__dirname_, '../../build/icon.ico') } : {}),
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     ...(process.platform === 'win32' ? { titleBarOverlay: TITLEBAR } : {}),

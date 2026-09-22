@@ -129,13 +129,6 @@ export class Player {
     return this.hls?.currentLevel ?? -1
   }
 
-  /** Seconds between the playhead and the live edge. */
-  behindLive(): number {
-    const seekable = this.video.seekable
-    if (!seekable.length) return 0
-    return Math.max(0, seekable.end(seekable.length - 1) - this.video.currentTime)
-  }
-
   /**
    * The scrubbable window: everything still held in the SourceBuffer.
    *
@@ -155,13 +148,6 @@ export class Player {
     const { start, end } = this.seekableWindow()
     // Clamp inside the window; seeking past the live edge stalls the demuxer.
     this.video.currentTime = Math.min(end, Math.max(start, time))
-  }
-
-  /** Seconds of rewind actually buffered behind the playhead. */
-  rewindAvailable(): number {
-    const b = this.video.buffered
-    if (!b.length) return 0
-    return Math.max(0, this.video.currentTime - b.start(0))
   }
 
   seekToLive(): void {

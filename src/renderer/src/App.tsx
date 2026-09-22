@@ -165,7 +165,12 @@ export default function App(): React.JSX.Element {
       setSummaries([])
       return
     }
-    setSummaries(await window.slipstream.favourites.summaries(logins))
+    try {
+      setSummaries(await window.slipstream.favourites.summaries(logins))
+    } catch {
+      // Leave the previous rows up. A failed poll is not worth blanking a list
+      // the user is reading, and the next tick will correct it.
+    }
   }, [])
 
   const loadEmotes = useCallback(async (login: string): Promise<void> => {
@@ -176,7 +181,8 @@ export default function App(): React.JSX.Element {
       return
     }
 
-    const set = await window.slipstream.fetchEmotes(login, wanted)
+    const set = await window.slipstream.fetchEmotes(login, wanted).catch(() => null)
+    if (!set) return
     // Both can change while a thousand emotes are being fetched.
     if (loginRef.current !== login || emoteProvidersRef.current !== wanted) return
 
@@ -255,6 +261,9 @@ export default function App(): React.JSX.Element {
     setPhase({ kind: 'playing', stream: result.stream })
     playerRef.current?.load(result.stream.masterPlaylist)
     listRef.current?.clear()
+    // Drop the previous channel's emote table. Until the new one arrives this
+    // would otherwise render channel A's emotes inside channel B's chat.
+    if (listRef.current) listRef.current.emotes = null
     if (!chatClosedRef.current) {
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login, credentials)
@@ -297,9 +306,13 @@ export default function App(): React.JSX.Element {
   const mutateFavourites = useCallback(
     async (fn: (login: string) => Promise<string[]>, login: string): Promise<void> => {
       if (!bridgeReady()) return
-      const next = await fn(login)
-      setFavourites(next)
-      void refreshSummaries(next)
+      try {
+        const next = await fn(login)
+        setFavourites(next)
+        void refreshSummaries(next)
+      } catch {
+        // The list on disk is unchanged, so the UI is still telling the truth.
+      }
     },
     [refreshSummaries]
   )
@@ -413,8 +426,18 @@ export default function App(): React.JSX.Element {
     if (phase.kind !== 'playing') return
     const video = videoRef.current
     const tick = (): void => {
-      const window = playerRef.current?.seekableWindow()
-      if (window) setDvr(window)
+      const next = playerRef.current?.seekableWindow()
+      if (!next) return
+      // Bail when nothing moved. Without this the control bar, chat pane and
+      // favourites re-render four times a second while the video is paused,
+      // for a bar that cannot have shifted a pixel.
+      setDvr((prev) =>
+        Math.abs(prev.current - next.current) < 0.1 &&
+        Math.abs(prev.start - next.start) < 0.1 &&
+        Math.abs(prev.end - next.end) < 0.1
+          ? prev
+          : next
+      )
     }
     tick()
     const id = setInterval(tick, 250)
@@ -431,10 +454,13 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!bridgeReady()) return
-    void window.slipstream.favourites.list().then((list) => {
-      setFavourites(list)
-      void refreshSummaries(list)
-    })
+    void window.slipstream.favourites
+      .list()
+      .then((list) => {
+        setFavourites(list)
+        void refreshSummaries(list)
+      })
+      .catch(() => undefined)
   }, [refreshSummaries])
 
   // Poll, and catch up whenever the window is looked at again - coming back to
