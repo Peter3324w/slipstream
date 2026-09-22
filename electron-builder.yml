@@ -19,7 +19,7 @@ electronDist: node_modules/electron/dist
 win:
   icon: build/icon.ico
   target:
-    - target: dir
+    - target: nsis
       arch: [x64]
 
 nsis:
