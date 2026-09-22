@@ -319,13 +319,40 @@ winget install --id shinchiro.mpv --source winget
 
 ```
 npm install
-npm run dev        # electron-vite: HMR for the renderer, auto-restart for main
+npm run dev        # --watch: renderer HMR, plus rebuild+restart on main/preload changes
 npm run build      # typecheck both projects, then bundle to out/
+npm run dist       # build, then package a Windows installer into release/
 npm run typecheck
 ```
 
 Requires Node 22+ (Electron 44's floor) and streamlink on PATH. Press `F2` in the running app for
 the per-process memory readout.
+
+### Packaging
+
+`npm run dist` produces `release/Slipstream Setup 0.1.0.exe` (~113MB, per-user install with Start
+Menu and desktop shortcuts) and the unpacked app beside it.
+
+Packaging uses the Electron already in `node_modules` (`electronDist`) rather than fetching its
+own, which matters on a connection where the release-asset CDN is unroutable. NSIS and 7zip *are*
+fetched on first run — set `ELECTRON_BUILDER_BINARIES_MIRROR` to
+`https://registry.npmmirror.com/-/binary/electron-builder-binaries/` if they stall at 0 B/s.
+
+**Close the app before packaging.** A running instance holds `dxcompiler.dll` and the build fails
+with `EPERM ... unlink`, which does not mention the app at all.
+
+`build/` holds the icon and is **not** ignored — it is electron-builder's `buildResources`, so
+ignoring it would mean a fresh clone packages with Electron's default icon.
+
+### Measured
+
+| | processes | idle |
+|---|---|---|
+| `npm run dev` | 4–5 | 310–490 MB |
+| **packaged** | **4** | **290.9 MB** |
+
+Against the 2.06 GB / 14-process Edge tab this replaces. The target is under 300MB *with video and
+chat running*, so idle is not the finish line — `F2` gives the live number.
 
 ### Toolchain gotchas, learned the hard way
 
