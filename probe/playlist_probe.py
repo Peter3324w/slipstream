@@ -47,6 +47,9 @@ BOUNDARY = {
     "EXT-X-ASSET", "EXT-X-SPLICEPOINT-SCTE35",
 }
 
+# Long enough to ride out a routing blip, short enough to notice a dead stream.
+MAX_RESOLVE_FAILURES = 8
+
 ATTR_RE = re.compile(r'([A-Za-z0-9-]+)=("[^"]*"|[^,]*)')
 TAG_RE = re.compile(r'^#(EXT[A-Z0-9-]*)(?::(.*))?$')
 
@@ -162,6 +165,7 @@ def main():
     ad_started = None
     polls = 0
     discontinuities = 0
+    resolve_failures = 0
     seen_dateranges: set[str] = set()
 
     while True:
@@ -174,10 +178,23 @@ def main():
             emit("reresolve", code=e.code)
             try:
                 url = resolve_stream_url(args.channel, args.quality)
+                resolve_failures = 0
             except Exception as ex:
-                emit("fatal", error=str(ex))
-                print(f"could not re-resolve: {ex}", file=sys.stderr)
-                return 1
+                # One timed-out re-resolve is not a reason to abandon a probe
+                # that has to run for hours. This network drops usher.ttvnw.net
+                # intermittently, and giving up loses the whole session.
+                resolve_failures += 1
+                emit("reresolve_failed", error=str(ex), consecutive=resolve_failures)
+                if resolve_failures >= MAX_RESOLVE_FAILURES:
+                    emit("fatal", error=str(ex))
+                    print(f"gave up after {resolve_failures} failed re-resolves: {ex}",
+                          file=sys.stderr)
+                    return 1
+                wait = min(60, 5 * resolve_failures)
+                print(f"[{now()}] re-resolve failed "
+                      f"({resolve_failures}/{MAX_RESOLVE_FAILURES}), retrying in {wait}s",
+                      file=sys.stderr)
+                time.sleep(wait)
             continue
         except Exception as e:
             emit("fetch_error", error=str(e))
