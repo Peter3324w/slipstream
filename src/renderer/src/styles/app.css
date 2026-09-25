@@ -192,6 +192,7 @@ input { font: inherit; color: inherit; }
 .ctl:hover { background: var(--surface-2); color: var(--text); }
 .ctl:disabled { opacity: 0.35; cursor: default; }
 .ctl:disabled:hover { background: none; color: var(--text-dim); }
+.ctl-stop:not(:disabled):hover { background: rgba(240, 85, 106, 0.14); color: var(--live); }
 
 .volume { display: flex; align-items: center; gap: 8px; }
 .volume input[type="range"] {

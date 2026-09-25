@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { QualityLevel } from '@/player/hls'
-import { Layers, Pause, Play, Volume, VolumeOff } from './Icons'
+import { Layers, Pause, Play, Stop, Volume, VolumeOff } from './Icons'
 import { DvrBar } from './DvrBar'
 
 interface Props {
   ready: boolean
   playing: boolean
   onPlayPause: () => void
+  /** Ends the stream and its chat without closing the app. */
+  onStop: () => void
+  /** Something is loaded or loading, so there is something to stop. */
+  canStop: boolean
   onSeek: (delta: number) => void
   /** The scrubbable window, in media seconds. */
   dvr: { start: number; end: number; current: number }
@@ -53,6 +57,15 @@ export function Controls(props: Props): React.JSX.Element {
         title={props.playing ? 'Pause  (Space)' : 'Play  (Space)'}
       >
         {props.playing ? <Pause /> : <Play />}
+      </button>
+
+      <button
+        className="ctl ctl-stop"
+        onClick={props.onStop}
+        disabled={!props.canStop}
+        title="Stop stream - ends video and chat  (X)"
+      >
+        <Stop />
       </button>
 
       <button className="ctl" onClick={() => props.onSeek(-10)} disabled={!props.ready} title="Back 10s  (Left)">

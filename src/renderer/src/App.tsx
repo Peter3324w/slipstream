@@ -381,6 +381,28 @@ export default function App(): React.JSX.Element {
     setPhase({ kind: 'idle' })
   }, [])
 
+  /**
+   * Turn the stream off without closing the app: video, chat and emotes all
+   * let go, so nothing is downloading until you pick another channel.
+   */
+  const stop = useCallback((): void => {
+    // Clearing the ref also makes any in-flight resolve discard itself.
+    loginRef.current = null
+    setChannel(null)
+    setPhase({ kind: 'idle' })
+    playerRef.current?.stop()
+    setLevels([])
+    setActiveLevel(-1)
+    setPlaying(false)
+    setDvr({ start: 0, end: 0, current: 0 })
+    chatRef.current?.disconnect()
+    setChatState('idle')
+    setChatBytes(0)
+    listRef.current?.clear()
+    if (listRef.current) listRef.current.emotes = null
+    setEmoteCounts({ '7tv': 0, bttv: 0, ffz: 0 })
+  }, [])
+
   /** Re-run the token dance and swap the manifest without disturbing chat. */
   const refresh = useCallback(async (): Promise<void> => {
     const login = loginRef.current
@@ -644,6 +666,9 @@ export default function App(): React.JSX.Element {
             return !v
           })
           break
+        case 'x':
+          stop()
+          break
         case 'f2':
           setHudVisible((v) => !v)
           break
@@ -651,7 +676,7 @@ export default function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [seek, togglePlay, toggleChat])
+  }, [seek, togglePlay, toggleChat, stop])
 
   // --------------------------------------------------------------- view
 
@@ -806,6 +831,8 @@ export default function App(): React.JSX.Element {
           ready={phase.kind === 'playing'}
           playing={playing}
           onPlayPause={togglePlay}
+          onStop={stop}
+          canStop={phase.kind !== 'idle'}
           onSeek={seek}
           dvr={dvr}
           onSeekTo={(time) => playerRef.current?.seekTo(time)}

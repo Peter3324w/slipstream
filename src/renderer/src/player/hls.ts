@@ -155,6 +155,17 @@ export class Player {
     if (seekable.length) this.video.currentTime = seekable.end(seekable.length - 1)
   }
 
+  /**
+   * Stop and let go of everything the stream holds: the hls.js instance, its
+   * buffered segments and the decoder. Leaves a black, empty element behind.
+   */
+  stop(): void {
+    this.destroy()
+    this.video.pause()
+    this.video.removeAttribute('src')
+    this.video.load()
+  }
+
   destroy(): void {
     this.hls?.destroy()
     this.hls = null

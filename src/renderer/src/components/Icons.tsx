@@ -26,6 +26,12 @@ export const Pause = ({ size = 16 }: P): React.JSX.Element => (
   </svg>
 )
 
+export const Stop = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)} fill="currentColor" stroke="none">
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+  </svg>
+)
+
 export const Volume = ({ size = 16 }: P): React.JSX.Element => (
   <svg {...base(size)}>
     <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" fill="currentColor" stroke="none" />
