@@ -32,6 +32,13 @@ export const Stop = ({ size = 16 }: P): React.JSX.Element => (
   </svg>
 )
 
+export const Clock = ({ size = 14 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+)
+
 export const Volume = ({ size = 16 }: P): React.JSX.Element => (
   <svg {...base(size)}>
     <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" fill="currentColor" stroke="none" />

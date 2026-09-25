@@ -150,6 +150,14 @@ export class Player {
     this.video.currentTime = Math.min(end, Math.max(start, time))
   }
 
+  /**
+   * Wall-clock ms of the frame on screen, from the segments'
+   * EXT-X-PROGRAM-DATE-TIME. Null before the first dated segment, or with none.
+   */
+  playingDate(): number | null {
+    return this.hls?.playingDate?.getTime() ?? null
+  }
+
   seekToLive(): void {
     const seekable = this.video.seekable
     if (seekable.length) this.video.currentTime = seekable.end(seekable.length - 1)

@@ -12,6 +12,7 @@ import { parseChannelInput } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
+import { ChatSync } from './chat/sync'
 import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
@@ -43,6 +44,8 @@ const HIDE_SIGNIN_KEY = 'slipstream.hideSignIn'
 /** Twitch changes slowly; a minute is responsive without hammering GQL. */
 const SUMMARY_POLL_MS = 60_000
 const EMOTES_KEY = 'slipstream.emotes'
+/** Stored as "off" only; sync is the default. */
+const CHAT_SYNC_OFF_KEY = 'slipstream.chatSyncOff'
 
 /** A saved favourite Twitch has not been asked about yet, or could not answer for. */
 function unchecked(login: string): ChannelSummary {
@@ -115,6 +118,7 @@ export default function App(): React.JSX.Element {
   const playerRef = useRef<Player | null>(null)
   const chatRef = useRef<TwitchChat | null>(null)
   const listRef = useRef<ChatList | null>(null)
+  const syncRef = useRef<ChatSync | null>(null)
   /** The channel currently on screen, readable from callbacks without re-binding. */
   const loginRef = useRef<string | null>(null)
 
@@ -145,6 +149,8 @@ export default function App(): React.JSX.Element {
   const [railVisible, setRailVisible] = useState(() => localStorage.getItem(RAIL_KEY) !== '0')
   const [railCollapsed, setRailCollapsed] = useState(() => readFlag(RAIL_COLLAPSED_KEY))
   const [chatCollapsed, setChatCollapsed] = useState(() => readFlag(CHAT_COLLAPSED_KEY))
+  /** Chat held back to the frame on screen, so pausing or rewinding moves it too. */
+  const [chatSync, setChatSync] = useState(() => !readFlag(CHAT_SYNC_OFF_KEY))
 
   const [auth, setAuth] = useState<AuthStatus | null>(null)
   const [showSignInSheet, setShowSignInSheet] = useState(false)
@@ -303,7 +309,7 @@ export default function App(): React.JSX.Element {
 
     setPhase({ kind: 'playing', stream: result.stream })
     playerRef.current?.load(result.stream.masterPlaylist)
-    listRef.current?.clear()
+    syncRef.current?.reset()
     // Drop the previous channel's emote table. Until the new one arrives this
     // would otherwise render channel A's emotes inside channel B's chat.
     if (listRef.current) listRef.current.emotes = null
@@ -322,7 +328,7 @@ export default function App(): React.JSX.Element {
     chatRef.current?.disconnect()
     // Drop the message nodes too - a closed chat should not still be holding
     // 250 elements and their emote images.
-    listRef.current?.clear()
+    syncRef.current?.reset()
     setChatState('idle')
   }, [])
 
@@ -333,7 +339,7 @@ export default function App(): React.JSX.Element {
     localStorage.removeItem(CHAT_CLOSED_KEY)
     const login = loginRef.current
     if (login) {
-      listRef.current?.clear()
+      syncRef.current?.reset()
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login, credentials)
       void loadEmotes(login)
@@ -345,6 +351,14 @@ export default function App(): React.JSX.Element {
    * button: it costs data, so it lives behind Connect in the panel itself.
    */
   const toggleChat = useCallback((): void => setChatVisible((v) => !v), [])
+
+  const toggleChatSync = useCallback((): void => {
+    setChatSync((v) => {
+      writeFlag(CHAT_SYNC_OFF_KEY, v)
+      syncRef.current?.setEnabled(!v)
+      return !v
+    })
+  }, [])
 
   const toggleRailCollapsed = useCallback((): void => {
     setRailCollapsed((v) => {
@@ -398,7 +412,7 @@ export default function App(): React.JSX.Element {
     chatRef.current?.disconnect()
     setChatState('idle')
     setChatBytes(0)
-    listRef.current?.clear()
+    syncRef.current?.reset()
     if (listRef.current) listRef.current.emotes = null
     setEmoteCounts({ '7tv': 0, bttv: 0, ffz: 0 })
   }, [])
@@ -435,13 +449,17 @@ export default function App(): React.JSX.Element {
 
     const list = new ChatList(log, 250, (pinned) => setShowJump(!pinned))
     listRef.current = list
+    // The player is created below; the clock reads it through the ref.
+    const sync = new ChatSync(list, () => playerRef.current?.playingDate() ?? null, 250)
+    sync.setEnabled(!readFlag(CHAT_SYNC_OFF_KEY))
+    syncRef.current = sync
 
     const chat = new TwitchChat({
-      onMessage: (m) => list.push(m),
+      onMessage: (m) => sync.push(m),
       onSystem: (t) => list.system(t),
       onState: setChatState,
       onIdentity: (identity) => setCanSend(identity !== null),
-      onPurge: (login) => list.purge(login)
+      onPurge: (login) => sync.purge(login)
     })
     chatRef.current = chat
 
@@ -469,7 +487,9 @@ export default function App(): React.JSX.Element {
       traffic.stop()
       player.destroy()
       chat.disconnect()
+      sync.destroy()
       list.destroy()
+      syncRef.current = null
       playerRef.current = null
       chatRef.current = null
       listRef.current = null
@@ -868,6 +888,8 @@ export default function App(): React.JSX.Element {
         channel={channel}
         collapsed={chatCollapsed}
         onToggleCollapsed={toggleChatCollapsed}
+        synced={chatSync}
+        onToggleSync={toggleChatSync}
         showJump={showJump}
         onJump={() => listRef.current?.jumpToLatest()}
         closed={chatClosed}

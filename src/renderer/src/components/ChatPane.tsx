@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import type { ChatState } from '@/chat/irc'
 import type { EmoteProvider } from '@shared/types'
-import { ChevronLeft, ChevronRight, Power } from './Icons'
+import { ChevronLeft, ChevronRight, Clock, Power } from './Icons'
 import { EmoteMenu, data } from './EmoteMenu'
 import { ChatInput } from './ChatInput'
 
@@ -15,6 +15,9 @@ interface Props {
    */
   collapsed: boolean
   onToggleCollapsed: () => void
+  /** Chat follows the video: pausing freezes it, rewinding replays it. */
+  synced: boolean
+  onToggleSync: () => void
   showJump: boolean
   onJump: () => void
   /** Closed means the socket is gone, not merely off screen. */
@@ -67,6 +70,19 @@ export function ChatPane(props: Props): React.JSX.Element {
                 {data(props.bytes)}
               </span>
             )}
+
+            <button
+              className={`chat-7tv ${props.synced ? 'is-on' : ''}`}
+              onClick={props.onToggleSync}
+              title={
+                props.synced
+                  ? 'Chat is synced to the video - pausing freezes it, rewinding replays it. Click for real-time chat.'
+                  : 'Chat is real-time. Click to sync it to the video.'
+              }
+            >
+              <Clock size={11} />
+              sync
+            </button>
 
             <EmoteMenu
               enabled={props.emoteProviders}
