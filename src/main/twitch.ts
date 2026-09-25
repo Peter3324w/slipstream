@@ -98,6 +98,8 @@ export async function channelSummaries(logins: string[]): Promise<ChannelSummary
   for (let i = 0; i < logins.length; i += BATCH) chunks.push(logins.slice(i, i + BATCH))
 
   const found = new Map<string, ChannelSummary>()
+  /** Logins whose batch never answered. Unknown, not missing. */
+  const unchecked = new Set<string>()
 
   await Promise.all(
     chunks.map(async (chunk) => {
@@ -108,7 +110,10 @@ export async function channelSummaries(logins: string[]): Promise<ChannelSummary
           body: JSON.stringify({ query: SUMMARY_QUERY, variables: { logins: chunk } }),
           signal: AbortSignal.timeout(15_000)
         })
-        if (!res.ok) return
+        if (!res.ok) {
+          chunk.forEach((login) => unchecked.add(login))
+          return
+        }
 
         const body = (await res.json()) as { data?: { users?: (GqlUser | null)[] } }
         for (const user of body.data?.users ?? []) {
@@ -128,6 +133,7 @@ export async function channelSummaries(logins: string[]): Promise<ChannelSummary
         }
       } catch {
         // A failed batch leaves those channels unknown rather than failing the lot.
+        chunk.forEach((login) => unchecked.add(login))
       }
     })
   )
@@ -144,7 +150,7 @@ export async function channelSummaries(logins: string[]): Promise<ChannelSummary
         viewers: null,
         game: null,
         title: null,
-        exists: false
+        exists: unchecked.has(login) ? null : false
       }
   )
 }

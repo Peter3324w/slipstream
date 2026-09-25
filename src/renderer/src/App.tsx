@@ -31,6 +31,9 @@ const VOLUME_KEY = 'slipstream.volume'
 const QUALITY_KEY = 'slipstream.quality'
 const CHAT_CLOSED_KEY = 'slipstream.chatClosed'
 const RAIL_KEY = 'slipstream.rail'
+/** Collapsed is not hidden: the panel stays on screen as a slim strip. */
+const RAIL_COLLAPSED_KEY = 'slipstream.railCollapsed'
+const CHAT_COLLAPSED_KEY = 'slipstream.chatCollapsed'
 /**
  * Sign-in is optional in a way the rest of this app is not: watching, reading
  * chat, emotes and favourites all work with no account. It is only needed to
@@ -40,6 +43,37 @@ const HIDE_SIGNIN_KEY = 'slipstream.hideSignIn'
 /** Twitch changes slowly; a minute is responsive without hammering GQL. */
 const SUMMARY_POLL_MS = 60_000
 const EMOTES_KEY = 'slipstream.emotes'
+
+/** A saved favourite Twitch has not been asked about yet, or could not answer for. */
+function unchecked(login: string): ChannelSummary {
+  return {
+    login,
+    display: login,
+    avatar: null,
+    live: false,
+    viewers: null,
+    game: null,
+    title: null,
+    exists: null
+  }
+}
+
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeFlag(key: string, on: boolean): void {
+  try {
+    if (on) localStorage.setItem(key, '1')
+    else localStorage.removeItem(key)
+  } catch {
+    // A collapsed panel that forgets itself on restart is not worth an error.
+  }
+}
 
 /**
  * Main's own caps add up to about 53s (30s streamlink + 15s manifest + 8s liveness),
@@ -109,6 +143,8 @@ export default function App(): React.JSX.Element {
   const [favourites, setFavourites] = useState<string[]>([])
   const [summaries, setSummaries] = useState<ChannelSummary[]>([])
   const [railVisible, setRailVisible] = useState(() => localStorage.getItem(RAIL_KEY) !== '0')
+  const [railCollapsed, setRailCollapsed] = useState(() => readFlag(RAIL_COLLAPSED_KEY))
+  const [chatCollapsed, setChatCollapsed] = useState(() => readFlag(CHAT_COLLAPSED_KEY))
 
   const [auth, setAuth] = useState<AuthStatus | null>(null)
   const [showSignInSheet, setShowSignInSheet] = useState(false)
@@ -166,7 +202,14 @@ export default function App(): React.JSX.Element {
       return
     }
     try {
-      setSummaries(await window.slipstream.favourites.summaries(logins))
+      const next = await window.slipstream.favourites.summaries(logins)
+      // A batch that failed comes back as "could not check". If we already knew
+      // better from the last poll, keep that rather than wiping it.
+      setSummaries((prev) =>
+        next.map((row) =>
+          row.exists === null ? (prev.find((p) => p.login === row.login) ?? row) : row
+        )
+      )
     } catch {
       // Leave the previous rows up. A failed poll is not worth blanking a list
       // the user is reading, and the next tick will correct it.
@@ -302,6 +345,20 @@ export default function App(): React.JSX.Element {
    * button: it costs data, so it lives behind Connect in the panel itself.
    */
   const toggleChat = useCallback((): void => setChatVisible((v) => !v), [])
+
+  const toggleRailCollapsed = useCallback((): void => {
+    setRailCollapsed((v) => {
+      writeFlag(RAIL_COLLAPSED_KEY, !v)
+      return !v
+    })
+  }, [])
+
+  const toggleChatCollapsed = useCallback((): void => {
+    setChatCollapsed((v) => {
+      writeFlag(CHAT_COLLAPSED_KEY, !v)
+      return !v
+    })
+  }, [])
 
   const mutateFavourites = useCallback(
     async (fn: (login: string) => Promise<string[]>, login: string): Promise<void> => {
@@ -600,8 +657,14 @@ export default function App(): React.JSX.Element {
 
   const stream = phase.kind === 'playing' ? phase.stream : null
 
+  // Rows come from the saved list, not from the lookup. Otherwise a slow or
+  // failed first poll shows "nothing here yet" over a list that is on disk.
+  const rows = favourites.map((login) => summaries.find((s) => s.login === login) ?? unchecked(login))
+
   return (
-    <div className={`app ${chatVisible ? '' : 'chat-hidden'} ${railVisible ? '' : 'rail-hidden'}`}>
+    <div
+      className={`app ${chatVisible ? '' : 'chat-hidden'} ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed ? 'chat-collapsed' : ''}`}
+    >
       <header className="titlebar">
         <div className="wordmark">
           <span className="dot" />
@@ -712,8 +775,10 @@ export default function App(): React.JSX.Element {
       </header>
 
       <Favourites
-        channels={summaries}
+        channels={rows}
         current={channel}
+        collapsed={railCollapsed}
+        onToggleCollapsed={toggleRailCollapsed}
         onPick={(login) => void start(login)}
         onRemove={(login) => void mutateFavourites(window.slipstream.favourites.remove, login)}
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
@@ -774,6 +839,8 @@ export default function App(): React.JSX.Element {
         logRef={logRef}
         state={chatState}
         channel={channel}
+        collapsed={chatCollapsed}
+        onToggleCollapsed={toggleChatCollapsed}
         showJump={showJump}
         onJump={() => listRef.current?.jumpToLatest()}
         closed={chatClosed}

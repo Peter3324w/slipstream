@@ -114,3 +114,15 @@ export const Rail = ({ size = 16 }: P): React.JSX.Element => (
     <path d="M10 5v14" />
   </svg>
 )
+
+export const ChevronLeft = ({ size = 14 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M14.5 6l-6 6 6 6" />
+  </svg>
+)
+
+export const ChevronRight = ({ size = 14 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M9.5 6l6 6-6 6" />
+  </svg>
+)

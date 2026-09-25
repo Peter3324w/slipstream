@@ -259,6 +259,22 @@ input { font: inherit; color: inherit; }
 }
 .app.chat-hidden .chat { display: none; }
 
+/* Collapsed: a strip that still says whether chat is connected. The log stays
+   mounted (the message list binds to it once) - it is only out of sight. */
+.chat { transition: width 0.24s var(--ease); overflow: hidden; }
+.app.chat-collapsed .chat { width: var(--strip-w); }
+.app.chat-collapsed .chat-head {
+  flex-direction: column;
+  justify-content: flex-start;
+  height: auto;
+  padding: 7px 0 10px;
+  gap: 12px;
+  border-bottom: 0;
+}
+.app.chat-collapsed .chat-body { display: none; }
+.chat-head .chat-state-dot { margin-left: 0; }
+.chat-head .chat-state-dot::before { width: 7px; height: 7px; }
+
 .chat-head {
   display: flex; align-items: center; gap: 8px;
   height: 38px; padding: 0 12px;
@@ -689,6 +705,29 @@ input { font: inherit; color: inherit; }
 }
 .app.rail-hidden .rail { display: none; }
 
+.rail { transition: width 0.24s var(--ease); overflow: hidden; }
+.app.rail-collapsed .rail { width: 58px; }
+.app.rail-collapsed .rail-head { justify-content: center; padding: 0; }
+.app.rail-collapsed .rail-head .panel-toggle { margin: 0; }
+.app.rail-collapsed .rail-list { padding: 6px 0; scrollbar-width: none; }
+.app.rail-collapsed .rail-list::-webkit-scrollbar { display: none; }
+.app.rail-collapsed .rail-item { justify-content: center; padding: 7px 0; border-radius: 0; }
+
+/* Shared by both side panels: the chevron that folds them to a strip. */
+.panel-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--text-faint);
+  transition: background 0.12s, color 0.12s;
+}
+.panel-toggle:hover { background: var(--surface-2); color: var(--text); }
+.rail-head .panel-toggle { margin-left: 6px; }
+.rail-head > span:first-child + .panel-toggle { margin-left: auto; }
+
 .rail-head {
   display: flex;
   align-items: center;
@@ -738,7 +777,31 @@ input { font: inherit; color: inherit; }
   object-fit: cover;
   background: var(--surface-3);
 }
-.rail-avatar-blank { display: block; }
+.rail-avatar-blank {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.rail-avatar-wrap { position: relative; flex: none; display: grid; }
+
+/* Always present, so offline reads as a state rather than as missing data. */
+.rail-status {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 99px;
+  border: 2px solid var(--surface);
+  background: var(--text-faint);
+}
+.rail-item.is-live .rail-status { background: var(--live); }
+.rail-item.is-missing .rail-status { background: transparent; box-shadow: inset 0 0 0 1.5px var(--live); }
+.rail-item.is-unknown .rail-status { background: var(--surface-3); box-shadow: inset 0 0 0 1.5px var(--text-faint); }
+.rail-item:hover .rail-status { border-color: var(--surface-2); }
 
 .rail-item.is-live .rail-avatar {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--live);

@@ -119,6 +119,10 @@ export interface ChannelSummary {
   viewers: number | null
   game: string | null
   title: string | null
-  /** False when Twitch returned null for this login — no such channel. */
-  exists: boolean
+  /**
+   * False when Twitch returned null for this login — no such channel. Null when
+   * the lookup itself failed, or has not come back yet: that says nothing about
+   * the channel, and must not be shown as if it did.
+   */
+  exists: boolean | null
 }

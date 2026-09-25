@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import type { ChatState } from '@/chat/irc'
 import type { EmoteProvider } from '@shared/types'
-import { Power } from './Icons'
+import { ChevronLeft, ChevronRight, Power } from './Icons'
 import { EmoteMenu, data } from './EmoteMenu'
 import { ChatInput } from './ChatInput'
 
@@ -9,6 +9,12 @@ interface Props {
   logRef: RefObject<HTMLDivElement | null>
   state: ChatState
   channel: string | null
+  /**
+   * Collapsed is a slim strip, and still connected - the same trade as hiding,
+   * but the panel stays where you can see it is there and open it again.
+   */
+  collapsed: boolean
+  onToggleCollapsed: () => void
   showJump: boolean
   onJump: () => void
   /** Closed means the socket is gone, not merely off screen. */
@@ -39,33 +45,50 @@ export function ChatPane(props: Props): React.JSX.Element {
   return (
     <aside className="chat">
       <div className="chat-head">
-        <span>{props.channel ? `#${props.channel}` : 'Chat'}</span>
+        <button
+          className="panel-toggle"
+          onClick={props.onToggleCollapsed}
+          title={props.collapsed ? 'Expand chat' : 'Collapse chat - stays connected'}
+        >
+          {props.collapsed ? <ChevronLeft /> : <ChevronRight />}
+        </button>
 
-        {!props.closed && props.bytes > 0 && (
-          <span className="chat-data" title="Payload received since connecting">
-            {data(props.bytes)}
-          </span>
-        )}
+        {props.collapsed ? (
+          <span
+            className={`chat-state chat-state-dot is-${props.closed ? 'idle' : props.state}`}
+            title={`Chat ${props.closed ? 'closed' : LABEL[props.state]}`}
+          />
+        ) : (
+          <>
+            <span>{props.channel ? `#${props.channel}` : 'Chat'}</span>
 
-        <EmoteMenu
-          enabled={props.emoteProviders}
-          counts={props.emoteCounts}
-          bytes={props.emoteBytes}
-          onToggle={props.onToggleProvider}
-        />
+            {!props.closed && props.bytes > 0 && (
+              <span className="chat-data" title="Payload received since connecting">
+                {data(props.bytes)}
+              </span>
+            )}
 
-        <span className={`chat-state is-${props.closed ? 'idle' : props.state}`}>
-          {props.closed ? 'closed' : LABEL[props.state]}
-        </span>
+            <EmoteMenu
+              enabled={props.emoteProviders}
+              counts={props.emoteCounts}
+              bytes={props.emoteBytes}
+              onToggle={props.onToggleProvider}
+            />
 
-        {!props.closed && (
-          <button
-            className="chat-close"
-            onClick={props.onClose}
-            title="Close chat - drops the connection and stops the data. Hiding it does not."
-          >
-            <Power />
-          </button>
+            <span className={`chat-state is-${props.closed ? 'idle' : props.state}`}>
+              {props.closed ? 'closed' : LABEL[props.state]}
+            </span>
+
+            {!props.closed && (
+              <button
+                className="chat-close"
+                onClick={props.onClose}
+                title="Close chat - drops the connection and stops the data. Hiding it does not."
+              >
+                <Power />
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -96,7 +119,7 @@ export function ChatPane(props: Props): React.JSX.Element {
 
       {/* With sign-in put away there is nothing to offer here: reading needs no
           account, and a prompt you cannot act on is worse than no prompt. */}
-      {!props.closed && (props.signedIn || props.showSignIn) && (
+      {!props.closed && !props.collapsed && (props.signedIn || props.showSignIn) && (
         <ChatInput
           signedIn={props.signedIn}
           canSend={props.canSend}
