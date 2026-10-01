@@ -6,6 +6,11 @@ interface Props {
   counts: Record<EmoteProvider, number>
   bytes: number
   onToggle: (provider: EmoteProvider) => void
+  /** Twitch's own emotes: globals and sub emotes, delivered in the message tags. */
+  twitch: boolean
+  onToggleTwitch: () => void
+  /** Every source at once - "no emotes" should not cost four clicks. */
+  onSetAll: (on: boolean) => void
 }
 
 const NAME: Record<EmoteProvider, string> = { '7tv': '7TV', bttv: 'BTTV', ffz: 'FFZ' }
@@ -29,7 +34,15 @@ export function data(bytes: number): string {
  * a couple of hundred and cost almost nothing. On a bad line that is a real
  * choice, not a preference.
  */
-export function EmoteMenu({ enabled, counts, bytes, onToggle }: Props): React.JSX.Element {
+export function EmoteMenu({
+  enabled,
+  counts,
+  bytes,
+  onToggle,
+  twitch,
+  onToggleTwitch,
+  onSetAll
+}: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLDivElement>(null)
 
@@ -42,7 +55,8 @@ export function EmoteMenu({ enabled, counts, bytes, onToggle }: Props): React.JS
     return () => document.removeEventListener('mousedown', close)
   }, [open])
 
-  const anyOn = enabled.length > 0
+  const anyOn = twitch || enabled.length > 0
+  const sources = [...(twitch ? ['Twitch'] : []), ...enabled.map((p) => NAME[p])]
 
   return (
     <div className="menu-anchor" ref={anchor}>
@@ -51,8 +65,8 @@ export function EmoteMenu({ enabled, counts, bytes, onToggle }: Props): React.JS
         onClick={() => setOpen((v) => !v)}
         title={
           anyOn
-            ? `Emotes from ${enabled.map((p) => NAME[p]).join(', ')}. ${data(bytes)} downloaded.`
-            : 'Emotes off - names render as plain text and nothing is downloaded.'
+            ? `Emotes from ${sources.join(', ')}. ${data(bytes)} downloaded.`
+            : 'Emotes off - every emote renders as its name, and nothing is downloaded.'
         }
       >
         {/* The byte count stays in the tooltip and the menu's foot - in the
@@ -62,6 +76,20 @@ export function EmoteMenu({ enabled, counts, bytes, onToggle }: Props): React.JS
 
       {open && (
         <div className="menu menu-down" role="menu">
+          <button className="menu-item menu-action" onClick={() => onSetAll(!anyOn)}>
+            {anyOn ? 'Turn all off' : 'Turn all on'}
+          </button>
+
+          <div className="menu-sep" />
+
+          {/* Twitch's own come first: they are what a channel actually uses, and
+              the third-party sets are an addition on top. There is no index to
+              drop here - switching them off stops a download per emote image. */}
+          <button className={`menu-item ${twitch ? 'is-active' : ''}`} onClick={onToggleTwitch}>
+            <span>Twitch</span>
+            <span className="hint">{twitch ? 'no index' : 'names only'}</span>
+          </button>
+
           {EMOTE_PROVIDERS.map((p) => {
             const on = enabled.includes(p)
             return (

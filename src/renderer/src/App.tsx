@@ -44,6 +44,8 @@ const HIDE_SIGNIN_KEY = 'slipstream.hideSignIn'
 /** Twitch changes slowly; a minute is responsive without hammering GQL. */
 const SUMMARY_POLL_MS = 60_000
 const EMOTES_KEY = 'slipstream.emotes'
+/** Stored as "off" only; Twitch's own emotes are the default. */
+const TWITCH_EMOTES_OFF_KEY = 'slipstream.twitchEmotesOff'
 /** Stored as "off" only; sync is the default. */
 const CHAT_SYNC_OFF_KEY = 'slipstream.chatSyncOff'
 
@@ -182,6 +184,15 @@ export default function App(): React.JSX.Element {
     return EMOTE_PROVIDERS.filter((p) => stored.split(',').includes(p))
   })
   const emoteProvidersRef = useRef<EmoteProvider[]>(emoteProviders)
+
+  /**
+   * Twitch's own emotes. Separate from the providers above because nothing is
+   * fetched for them - they arrive as ranges in the message tags - but they are
+   * the bulk of what a channel uses, so "turn emotes off" has to include them or
+   * it does not mean anything. Off, every emote reads as its name.
+   */
+  const [twitchEmotes, setTwitchEmotes] = useState(() => !readFlag(TWITCH_EMOTES_OFF_KEY))
+  const twitchEmotesRef = useRef(twitchEmotes)
   const [emoteBytes, setEmoteBytes] = useState(0)
   const [emoteCounts, setEmoteCounts] = useState<Record<EmoteProvider, number>>({
     '7tv': 0,
@@ -240,6 +251,15 @@ export default function App(): React.JSX.Element {
     if (set.errors.length) listRef.current?.system(`Emotes: ${set.errors.join('; ')}`)
   }, [])
 
+  const toggleTwitchEmotes = useCallback((): void => {
+    const next = !twitchEmotesRef.current
+    twitchEmotesRef.current = next
+    setTwitchEmotes(next)
+    localStorage.setItem(TWITCH_EMOTES_OFF_KEY, next ? '0' : '1')
+    // Takes effect on the next message; the log already drawn is left alone.
+    if (listRef.current) listRef.current.twitch = next
+  }, [])
+
   const toggleProvider = useCallback(
     (provider: EmoteProvider): void => {
       const current = emoteProvidersRef.current
@@ -247,6 +267,30 @@ export default function App(): React.JSX.Element {
         ? current.filter((p) => p !== provider)
         : EMOTE_PROVIDERS.filter((p) => p === provider || current.includes(p))
 
+      emoteProvidersRef.current = next
+      setEmoteProviders(next)
+      localStorage.setItem(EMOTES_KEY, next.join(','))
+
+      const login = loginRef.current
+      if (login) void loadEmotes(login)
+      else if (listRef.current) listRef.current.emotes = null
+    },
+    [loadEmotes]
+  )
+
+  /**
+   * Every source at once. "I want to read chat without emotes" is one decision,
+   * so it should not be four clicks - and it is the switch that matters on a
+   * metered or tethered line, where a busy channel is most of the traffic.
+   */
+  const setAllEmotes = useCallback(
+    (on: boolean): void => {
+      twitchEmotesRef.current = on
+      setTwitchEmotes(on)
+      localStorage.setItem(TWITCH_EMOTES_OFF_KEY, on ? '0' : '1')
+      if (listRef.current) listRef.current.twitch = on
+
+      const next = on ? EMOTE_PROVIDERS : []
       emoteProvidersRef.current = next
       setEmoteProviders(next)
       localStorage.setItem(EMOTES_KEY, next.join(','))
@@ -448,6 +492,7 @@ export default function App(): React.JSX.Element {
     if (!video || !log) return
 
     const list = new ChatList(log, 250, (pinned) => setShowJump(!pinned))
+    list.twitch = twitchEmotesRef.current
     listRef.current = list
     // The player is created below; the clock reads it through the ref.
     const sync = new ChatSync(list, () => playerRef.current?.playingDate() ?? null, 250)
@@ -900,6 +945,9 @@ export default function App(): React.JSX.Element {
         emoteCounts={emoteCounts}
         emoteBytes={emoteBytes}
         onToggleProvider={toggleProvider}
+        twitchEmotes={twitchEmotes}
+        onToggleTwitchEmotes={toggleTwitchEmotes}
+        onSetAllEmotes={setAllEmotes}
         signedIn={signedIn}
         showSignIn={showSignIn}
         canSend={canSend}

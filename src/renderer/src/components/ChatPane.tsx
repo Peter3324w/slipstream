@@ -29,6 +29,10 @@ interface Props {
   emoteCounts: Record<EmoteProvider, number>
   emoteBytes: number
   onToggleProvider: (provider: EmoteProvider) => void
+  /** Twitch's own emotes, switchable like any other source. */
+  twitchEmotes: boolean
+  onToggleTwitchEmotes: () => void
+  onSetAllEmotes: (on: boolean) => void
   signedIn: boolean
   showSignIn: boolean
   canSend: boolean
@@ -103,6 +107,9 @@ export function ChatPane(props: Props): React.JSX.Element {
               counts={props.emoteCounts}
               bytes={props.emoteBytes}
               onToggle={props.onToggleProvider}
+              twitch={props.twitchEmotes}
+              onToggleTwitch={props.onToggleTwitchEmotes}
+              onSetAll={props.onSetAllEmotes}
             />
 
             <span

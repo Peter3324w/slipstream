@@ -24,6 +24,14 @@ export class ChatList {
    */
   emotes: EmoteTable | null = null
 
+  /**
+   * Twitch's own emotes - the ones that arrive as ranges in the IRC tags, which
+   * is most of them: every global and every sub emote. Off leaves the name in
+   * the text, exactly as the sender typed it, so "LUL" reads as LUL instead of
+   * a 2KB image. Same live-switch trade as `emotes` above.
+   */
+  twitch = true
+
   private queue: ChatMessage[] = []
   private frame = 0
   private pinned = true
@@ -95,24 +103,34 @@ export class ChatList {
     const body = document.createElement('span')
     body.className = 'body'
 
-    // Twitch reports emote offsets in code points, so a message containing an
-    // astral character (any emoji) desyncs if you index the string directly.
-    const cps = Array.from(msg.body)
-    let cursor = 0
-    for (const e of msg.emotes) {
-      if (e.start < cursor || e.end >= cps.length) continue
-      if (e.start > cursor) this.appendText(body, cps.slice(cursor, e.start).join(''))
-      const img = document.createElement('img')
-      img.className = 'emote'
-      img.loading = 'lazy'
-      img.decoding = 'async'
-      img.src = `${EMOTE_CDN}/${e.id}/default/dark/1.0`
-      img.alt = cps.slice(e.start, e.end + 1).join('')
-      img.title = img.alt
-      body.append(img)
-      cursor = e.end + 1
+    if (this.twitch) {
+      // Twitch reports emote offsets in code points, so a message containing an
+      // astral character (any emoji) desyncs if you index the string directly.
+      const cps = Array.from(msg.body)
+      let cursor = 0
+      for (const e of msg.emotes) {
+        if (e.start < cursor || e.end >= cps.length) continue
+        if (e.start > cursor) this.appendText(body, cps.slice(cursor, e.start).join(''))
+        const name = cps.slice(e.start, e.end + 1).join('')
+        const img = document.createElement('img')
+        img.className = 'emote'
+        img.loading = 'lazy'
+        img.decoding = 'async'
+        img.src = `${EMOTE_CDN}/${e.id}/default/dark/1.0`
+        img.alt = name
+        img.title = name
+        // An image that never arrives must not leave a hole in the sentence: a
+        // broken 22px inline image draws nothing, so put the name back instead.
+        img.addEventListener('error', () => img.replaceWith(name), { once: true })
+        body.append(img)
+        cursor = e.end + 1
+      }
+      if (cursor < cps.length) this.appendText(body, cps.slice(cursor).join(''))
+    } else {
+      // Emote ranges ignored on purpose: the name is already sitting in the body
+      // text, so the whole message goes through the third-party pass instead.
+      this.appendText(body, msg.body)
     }
-    if (cursor < cps.length) this.appendText(body, cps.slice(cursor).join(''))
 
     el.append(body)
 

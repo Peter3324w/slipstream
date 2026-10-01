@@ -22,7 +22,8 @@ Twitch Interactive, Inc.
 
 **Chat**
 - Read-only, **no account needed** — anonymous IRC
-- Twitch's own emotes, plus **7TV, BTTV and FFZ**, each switchable on its own
+- Twitch's own emotes, plus **7TV, BTTV and FFZ**, each switchable on its own, or all off in one
+  click — and then every emote reads as its name (`LUL`, `XDD`) rather than leaving a gap
 - **Hide** chat (off screen, socket alive) is different from **Close** (socket dropped, message
   nodes freed, nothing downloaded)
 - The header shows bytes received, so the cost of leaving emotes on is a number rather than a claim
@@ -341,6 +342,17 @@ providers are switched **individually**: on a bad line, dropping 7TV while keepi
 real choice rather than a preference. Off means off — no index fetch, no images, names render as
 plain text. Messages already on screen keep what they downloaded, because stripping them out
 reclaims nothing. The chat header shows bytes downloaded, so the cost is a number and not a claim.
+
+**Twitch's own emotes switch the same way.** They arrive as ranges in the IRC tags, so there is no
+index to drop — but they are the bulk of what any channel actually uses, and each one is still an
+image fetched per message. Switched off, the range is left as the text the sender typed, which *is*
+the emote's name. Their images count towards the downloaded total too; before, that number quietly
+left out the emotes most channels use.
+
+**A broken emote shows its name, not a gap.** A failed inline image draws nothing at this size, so a
+dropped request used to swallow a word mid-sentence — and on a poor line that is the common case,
+not the rare one. Third-party emotes retry once on their cheaper-format `altUrl`; after that, and for
+Twitch's own on the first error, the image is replaced by its name.
 
 > **Cache schema.** Cached entries carry a version. Adding the `provider` field without one left
 > day-old cache files silently missing it — a channel contributed 1029 emotes and *none* survived

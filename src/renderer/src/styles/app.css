@@ -245,6 +245,10 @@ input { font: inherit; color: inherit; }
 .menu-item:hover { background: var(--surface-2); color: var(--text); }
 .menu-item.is-active { color: var(--accent); background: var(--accent-wash); }
 .menu-item .hint { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* An action, not a source: no is-active state to read, so it must not look like
+   a toggle sitting in the off position. */
+.menu-action { justify-content: center; font-size: 11px; color: var(--text-faint); }
+.menu-action:hover { color: var(--text); }
 .menu-sep { height: 1px; margin: 5px 4px; background: var(--border-soft); }
 
 /* --------------------------------------------------------------- chat */

@@ -5,7 +5,10 @@ export type EmoteTable = Record<string, Emote>
 const EMOTE_HOSTS = [
   'https://cdn.7tv.app/',
   'https://cdn.betterttv.net/',
-  'https://cdn.frankerfacez.com/'
+  'https://cdn.frankerfacez.com/',
+  // Twitch's own emotes are switchable too, so their images belong in the total.
+  // Without this the readout quietly undercounted the emotes most channels use.
+  'https://static-cdn.jtvnw.net/emoticons/'
 ]
 
 /**
@@ -34,13 +37,21 @@ export function emoteImg(emote: Emote): HTMLImageElement {
   }
 
   img.src = emote.url
-  if (emote.altUrl) {
-    const fallback = (): void => {
-      img.removeEventListener('error', fallback)
-      img.src = emote.altUrl as string
+  // One retry on the cheaper-format fallback, then give up and show the name.
+  // A broken inline image draws nothing at this size, and a gap where a word
+  // should be is worse than the word.
+  let retry = emote.altUrl
+  const onError = (): void => {
+    if (retry) {
+      const next = retry
+      retry = undefined
+      img.src = next
+      return
     }
-    img.addEventListener('error', fallback)
+    img.removeEventListener('error', onError)
+    img.replaceWith(emote.name)
   }
+  img.addEventListener('error', onError)
   return img
 }
 
