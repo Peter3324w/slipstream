@@ -28,8 +28,8 @@ Twitch Interactive, Inc.
 
 **Chat**
 - Read-only, **no account needed** — anonymous IRC
-- Twitch's own emotes, plus **7TV, BTTV and FFZ**, each switchable on its own, or all off in one
-  click — and then every emote reads as its name (`LUL`, `XDD`) rather than leaving a gap
+- Emotes from Twitch, **7TV, BTTV and FFZ**, behind **one switch**: `EMOTES` draws them, `NAMES`
+  reads chat as plain text, where `LUL` stays `LUL` rather than leaving a gap and nothing downloads
 - **Hide** chat (off screen, socket alive) is different from **Close** (socket dropped, message
   nodes freed, nothing downloaded)
 - The header shows bytes received, so the cost of leaving emotes on is a number rather than a claim
@@ -444,7 +444,7 @@ possible basis for a future "static emotes" mode.
 separate `animated` URL map (WebP); the plain `urls` map is PNG. No `content-length`, so sizes are
 not measurable by HEAD.
 
-### Cost, and why the switch is per provider
+### Cost, and why the switch is one switch
 
 | | |
 |---|---|
@@ -453,11 +453,20 @@ not measurable by HEAD.
 | Cold fetch | ~5.4 s |
 | From the 24h disk cache | **455 ms** |
 
-BTTV and FFZ indexes are a few hundred emotes between them and cost almost nothing. So the
-providers are switched **individually**: on a bad line, dropping 7TV while keeping BTTV and FFZ is a
-real choice rather than a preference. Off means off — no index fetch, no images, names render as
-plain text. Messages already on screen keep what they downloaded, because stripping them out
-reclaims nothing. The chat header shows bytes downloaded, so the cost is a number and not a claim.
+BTTV and FFZ indexes are a few hundred emotes between them and cost almost nothing, so 7TV is
+effectively the whole bill.
+
+This was four switches, one per source, on the argument that dropping 7TV while keeping the two
+cheap ones is a real choice on a bad line. It is — but it is not a choice anyone wants to make
+while reading chat, and four rows signalled by a tint could not even say which of them were on. The
+decision people actually have is binary: pictures, or words. So it is one switch, and the label says
+which mode chat is in rather than relying on a colour. The per-provider machinery is untouched
+underneath — main still fetches by provider — so the finer control is a UI change away if it is
+ever wanted back.
+
+Off means off: no index fetch, no images, names render as plain text. Messages already on screen
+keep what they downloaded, because stripping them out reclaims nothing. How much has been fetched
+is in the switch's tooltip, so the cost is a number and not a claim.
 
 **Twitch's own emotes switch the same way.** They arrive as ranges in the IRC tags, so there is no
 index to drop — but they are the bulk of what any channel actually uses, and each one is still an

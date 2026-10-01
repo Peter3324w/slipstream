@@ -219,11 +219,6 @@ export default function App(): React.JSX.Element {
   const vodChatRef = useRef<VodChat | null>(null)
   const [vodChatState, setVodChatState] = useState<VodChatState>('idle')
   const [emoteBytes, setEmoteBytes] = useState(0)
-  const [emoteCounts, setEmoteCounts] = useState<Record<EmoteProvider, number>>({
-    '7tv': 0,
-    bttv: 0,
-    ffz: 0
-  })
   const trafficRef = useRef<EmoteTraffic | null>(null)
   const [hudVisible, setHudVisible] = useState(false)
 
@@ -262,7 +257,6 @@ export default function App(): React.JSX.Element {
     const wanted = emoteProvidersRef.current
     if (!wanted.length || !bridgeReady()) {
       if (listRef.current) listRef.current.emotes = null
-      setEmoteCounts({ '7tv': 0, bttv: 0, ffz: 0 })
       return
     }
 
@@ -272,41 +266,14 @@ export default function App(): React.JSX.Element {
     if (loginRef.current !== login || emoteProvidersRef.current !== wanted) return
 
     if (listRef.current) listRef.current.emotes = set.emotes
-    setEmoteCounts(set.counts)
     if (set.errors.length) listRef.current?.system(`Emotes: ${set.errors.join('; ')}`)
   }, [])
 
-  const toggleTwitchEmotes = useCallback((): void => {
-    const next = !twitchEmotesRef.current
-    twitchEmotesRef.current = next
-    setTwitchEmotes(next)
-    localStorage.setItem(TWITCH_EMOTES_OFF_KEY, next ? '0' : '1')
-    // Takes effect on the next message; the log already drawn is left alone.
-    if (listRef.current) listRef.current.twitch = next
-  }, [])
-
-  const toggleProvider = useCallback(
-    (provider: EmoteProvider): void => {
-      const current = emoteProvidersRef.current
-      const next = current.includes(provider)
-        ? current.filter((p) => p !== provider)
-        : EMOTE_PROVIDERS.filter((p) => p === provider || current.includes(p))
-
-      emoteProvidersRef.current = next
-      setEmoteProviders(next)
-      localStorage.setItem(EMOTES_KEY, next.join(','))
-
-      const login = loginRef.current
-      if (login) void loadEmotes(login)
-      else if (listRef.current) listRef.current.emotes = null
-    },
-    [loadEmotes]
-  )
-
   /**
-   * Every source at once. "I want to read chat without emotes" is one decision,
-   * so it should not be four clicks - and it is the switch that matters on a
-   * metered or tethered line, where a busy channel is most of the traffic.
+   * The whole emote control: pictures, or words. Every source moves together,
+   * because that is the decision anyone actually has while reading chat - and it
+   * is the one that matters on a metered or tethered line, where a busy channel
+   * is most of the traffic.
    */
   const setAllEmotes = useCallback(
     (on: boolean): void => {
@@ -530,7 +497,6 @@ export default function App(): React.JSX.Element {
     setChatBytes(0)
     syncRef.current?.reset()
     if (listRef.current) listRef.current.emotes = null
-    setEmoteCounts({ '7tv': 0, bttv: 0, ffz: 0 })
   }, [])
 
   /** Re-run the token dance and swap the manifest without disturbing chat. */
@@ -1042,13 +1008,9 @@ export default function App(): React.JSX.Element {
         onConnect={openChat}
         vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
         vodState={vodChatState}
-        emoteProviders={emoteProviders}
-        emoteCounts={emoteCounts}
+        emotesOn={twitchEmotes || emoteProviders.length > 0}
         emoteBytes={emoteBytes}
-        onToggleProvider={toggleProvider}
-        twitchEmotes={twitchEmotes}
-        onToggleTwitchEmotes={toggleTwitchEmotes}
-        onSetAllEmotes={setAllEmotes}
+        onToggleEmotes={setAllEmotes}
         signedIn={signedIn}
         showSignIn={showSignIn}
         canSend={canSend}

@@ -1,9 +1,8 @@
 import type { RefObject } from 'react'
 import type { ChatState } from '@/chat/irc'
 import type { VodChatState } from '@/chat/vodChat'
-import type { EmoteProvider } from '@shared/types'
 import { ChevronLeft, ChevronRight, Clock, Power } from './Icons'
-import { EmoteMenu, data } from './EmoteMenu'
+import { EmoteToggle, data } from './EmoteToggle'
 import { ChatInput } from './ChatInput'
 
 interface Props {
@@ -26,17 +25,13 @@ interface Props {
   bytes: number
   onClose: () => void
   onConnect: () => void
-  emoteProviders: EmoteProvider[]
-  emoteCounts: Record<EmoteProvider, number>
-  emoteBytes: number
-  onToggleProvider: (provider: EmoteProvider) => void
-  /** Twitch's own emotes, switchable like any other source. */
   /** A VOD is replay, not a room: no sync toggle, no sending, its own states. */
   vod: boolean
   vodState: VodChatState
-  twitchEmotes: boolean
-  onToggleTwitchEmotes: () => void
-  onSetAllEmotes: (on: boolean) => void
+  /** Emotes drawn as images, or chat read as plain names. */
+  emotesOn: boolean
+  emoteBytes: number
+  onToggleEmotes: (on: boolean) => void
   signedIn: boolean
   showSignIn: boolean
   canSend: boolean
@@ -142,14 +137,10 @@ export function ChatPane(props: Props): React.JSX.Element {
               </button>
             )}
 
-            <EmoteMenu
-              enabled={props.emoteProviders}
-              counts={props.emoteCounts}
+            <EmoteToggle
+              on={props.emotesOn}
               bytes={props.emoteBytes}
-              onToggle={props.onToggleProvider}
-              twitch={props.twitchEmotes}
-              onToggleTwitch={props.onToggleTwitchEmotes}
-              onSetAll={props.onSetAllEmotes}
+              onToggle={props.onToggleEmotes}
             />
 
             <span className={`chat-state is-${dot}`} title={`Chat ${label}`}>
