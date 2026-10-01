@@ -102,6 +102,12 @@ export const ChatOff = ({ size = 16 }: P): React.JSX.Element => (
   </svg>
 )
 
+export const Check = ({ size = 11 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M5 12.5l4.5 4.5L19 7" />
+  </svg>
+)
+
 export const Power = ({ size = 14 }: P): React.JSX.Element => (
   <svg {...base(size)}>
     <path d="M12 4.5v7" />

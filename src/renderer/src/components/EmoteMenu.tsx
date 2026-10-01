@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { EMOTE_PROVIDERS, type EmoteProvider } from '@shared/types'
+import { Check } from './Icons'
 
 interface Props {
   enabled: EmoteProvider[]
@@ -85,21 +86,40 @@ export function EmoteMenu({
           {/* Twitch's own come first: they are what a channel actually uses, and
               the third-party sets are an addition on top. There is no index to
               drop here - switching them off stops a download per emote image. */}
-          <button className={`menu-item ${twitch ? 'is-active' : ''}`} onClick={onToggleTwitch}>
-            <span>Twitch</span>
-            <span className="hint">{twitch ? 'no index' : 'names only'}</span>
+          <button
+            className={`menu-item menu-toggle ${twitch ? 'is-active' : ''}`}
+            onClick={onToggleTwitch}
+            role="menuitemcheckbox"
+            aria-checked={twitch}
+          >
+            <span className="menu-box">
+              <Check />
+            </span>
+            <span className="menu-label">Twitch</span>
+            {/* Nothing is fetched for these, so there is no count to report. The
+                hint is only worth the room when it says what being off costs. */}
+            <span className="hint">{twitch ? '' : 'names only'}</span>
           </button>
 
           {EMOTE_PROVIDERS.map((p) => {
             const on = enabled.includes(p)
+            const count = counts[p]
             return (
               <button
                 key={p}
-                className={`menu-item ${on ? 'is-active' : ''}`}
+                className={`menu-item menu-toggle ${on ? 'is-active' : ''}`}
                 onClick={() => onToggle(p)}
+                role="menuitemcheckbox"
+                aria-checked={on}
               >
-                <span>{NAME[p]}</span>
-                <span className="hint">{on ? (counts[p] || '...') : WEIGHT[p]}</span>
+                <span className="menu-box">
+                  <Check />
+                </span>
+                <span className="menu-label">{NAME[p]}</span>
+                {/* On: how many it brought. Off: what turning it on would cost.
+                    An "on but not counted yet" row says nothing rather than the
+                    ellipsis it used to show, which read as broken. */}
+                <span className="hint">{on ? (count ? count.toLocaleString() : '') : WEIGHT[p]}</span>
               </button>
             )
           })}
