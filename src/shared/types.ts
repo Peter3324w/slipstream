@@ -126,6 +126,35 @@ export interface AuthStatus {
   persistent: boolean
 }
 
+/** A chat message recorded against a VOD, in the shape the log already draws. */
+export interface VodChatMessage {
+  id: string
+  /** Seconds from the start of the VOD - the clock chat replay runs on. */
+  offset: number
+  login: string
+  display: string
+  color: string | null
+  body: string
+  /** Code point offsets, like the IRC tag: see the note in twitch.ts. */
+  emotes: { id: string; start: number; end: number }[]
+}
+
+export interface VodChatPage {
+  messages: VodChatMessage[]
+  /**
+   * Where to ask from next. Twitch has no usable cursor for anonymous clients,
+   * so the next page is requested by offset and the overlap is deduplicated by
+   * id - the caller must do that, because a page starts about a second before
+   * the offset it was asked for.
+   */
+  nextOffset: number
+  hasMore: boolean
+  /** Payload bytes, so replay's cost shows up where the live socket's does. */
+  bytes: number
+  /** The lookup itself failed; this is not the end of the VOD. */
+  failed: boolean
+}
+
 /** One past broadcast, trimmed to what it takes to choose one. */
 export interface VodSummary {
   id: string

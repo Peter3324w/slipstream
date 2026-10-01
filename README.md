@@ -23,6 +23,8 @@ Twitch Interactive, Inc.
   end, with no rewind-buffer ceiling. Chat replay is not built yet, so chat says so and stays off
 - **"Not live" lists that channel's past broadcasts**, so an offline favourite is one click from
   something to watch rather than a trip to the website to find a video id
+- **VOD chat replay** — what was actually said, at the moment it was said. Pausing freezes it,
+  seeking rebuilds it. Chatterino cannot do this
 
 **Chat**
 - Read-only, **no account needed** — anonymous IRC
@@ -265,9 +267,7 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 
 ### Later
 
-- [ ] **VOD chat replay** — `video(id) { comments(contentOffsetSeconds:) }` returns ~59 comments per
-      request, about 102s of chat for 21KB, paged against `currentTime` rather than `playingDate`.
-      Fragments carry emote *ids*, not ranges over text, so it is less work than the IRC path
+- [x] **VOD chat replay** — see [VODs](#vods)
 - [ ] VOD downloader — `streamlink --output vod.ts twitch.tv/videos/<id> best`. Clip ranges with `--hls-start-offset` / `--hls-duration`. Remux with the ffmpeg streamlink already bundles
 - [ ] Multi-stream / picture-in-picture
 - [ ] Per-channel buffer and quality defaults
@@ -337,15 +337,54 @@ anonymous viewer and failing after the click is worse than saying so before it.
 That screen used to be a dead end with a Try again button, which sent you to twitch.tv to find an
 id and paste it back — the exact errand this app exists to save.
 
+### Chat replay
+
+Chat is the recorded chat, not the live room: the live room is a different conversation about a
+different day, and the sync clock would hold all of it anyway, since a VOD's `PROGRAM-DATE-TIME` is
+the original broadcast and nothing arriving now ever catches up to it.
+
+Replay is simpler than the live path, not harder. A comment carries `contentOffsetSeconds`, so the
+clock is just `video.currentTime` — no latency guess, no date arithmetic. Pausing freezes chat
+because that clock stops; seeking rebuilds the log from the new position. Both fall out of the
+design rather than being handled.
+
+**Paging is by offset and deduplicated by id, because cursors are refused.** `after:` returns
+`IntegrityCheckFailed` for an anonymous client — with a raw query *and* with Twitch's own persisted
+hash, so it wants a Client-Integrity token rather than a different query. Asking by offset works and
+keeps working, but a page starts about a second before the offset it was asked for, so consecutive
+pages overlap and the overlap has to be dropped by id. A page that is *entirely* overlap steps the
+offset by one second, or it would ask for the same window for ever.
+
+`first` is capped at 100 by the server and ignored in practice: every page came back 57-59 long.
+
+**What it costs, measured on an esports VOD** (caedrel, T1A vs Galions):
+
+| | |
+|---|---|
+| One page | 57-59 comments, **~14 KB** |
+| Chat it covers, hype moment | **9 s** |
+| Chat it covers, calm stretch | 28-53 s |
+| A seek, at a hype moment | ~6 requests, ~85 KB (it fetches 30s of context *behind* the playhead so a seek lands mid-conversation) |
+
+That cost is reported in the chat header's byte readout, the same place the live socket's is, because
+it is the same question.
+
+**Emote offsets are code points.** Fragments arrive as text-or-emote rather than as ranges, so the
+ranges are built here — and `[...text].length` is the length that matters, never `text.length`, or
+every message containing an emoji draws its emotes in the wrong place. That one is unit-tested with
+synthetic input, because a real VOD will not reliably hand you a message with an emoji *and* a
+first-party emote in it.
+
+Third-party emotes apply to replay too: it draws through the same log, so a 7TV name in a
+three-day-old message renders as the emote.
+
 ### What it deliberately does not do
 
-Chat. Twitch keeps what was said and it can be replayed by offset, but live chat beside a three-day
-old VOD is not that, and the sync clock would hold all of it anyway: a VOD's `PROGRAM-DATE-TIME` is
-the original broadcast, so nothing arriving now ever catches up to it. Chat says that, in the log,
-and stays off until replay exists.
-
-Sub-only VODs (`self { isRestricted }`) need an authenticated token and come back as
-`restricted` — untested, since the test account subscribes to nobody.
+Sending, obviously — the broadcast is over, so the box is not there. Sub-only VODs
+(`self { isRestricted }`) need an authenticated token and come back as `restricted` — untested,
+since the test account subscribes to nobody. Reaching the literal end of a VOD's chat sets an
+`end of vod` state that has also never been seen, for the same reason nobody watches 8 hours to
+check.
 
 ---
 

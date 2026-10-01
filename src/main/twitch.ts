@@ -11,7 +11,7 @@
  * tab and the same one streamlink itself sends. It is not a credential, and nothing
  * here is authenticated: the query asks only whether a login resolves to a user.
  */
-import type { ChannelSummary, VodSummary } from '@shared/types'
+import type { ChannelSummary, VodChatMessage, VodChatPage, VodSummary } from '@shared/types'
 
 const GQL = 'https://gql.twitch.tv/gql'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
@@ -121,6 +121,146 @@ export async function channelVods(login: string, first = 8): Promise<VodSummary[
   } catch {
     return []
   }
+}
+
+interface CommentFragment {
+  text?: string
+  emote?: { emoteID?: string } | null
+}
+
+/**
+ * Chat as it was said, for one window of a VOD.
+ *
+ * **Paging is by offset, and the caller must deduplicate by id.** Twitch's own
+ * player pages with a cursor, but `after:` is refused with `IntegrityCheckFailed`
+ * for an anonymous client - with a raw query *and* with Twitch's own persisted
+ * hash, so it wants a Client-Integrity token rather than a different query. Asking
+ * by offset works and keeps working; it just returns a page that begins about a
+ * second before the offset asked for, so consecutive pages overlap. Measured on a
+ * hype moment in an esports VOD: 58 returned, 35 already seen, 23 new. In a calm
+ * stretch the same page covers 50-100s and the overlap is a rounding error.
+ *
+ * `first` is capped at 100 by the server and ignored in practice: every page came
+ * back 57-59 long regardless.
+ *
+ * Never throws: `failed` says the lookup broke, which is not the same as the VOD
+ * having no more chat, and the caller must not treat it as the end.
+ */
+export async function vodComments(videoId: string, offsetSeconds: number): Promise<VodChatPage> {
+  const offset = Math.max(0, Math.floor(offsetSeconds))
+  const empty: VodChatPage = { messages: [], nextOffset: offset, hasMore: true, bytes: 0, failed: true }
+
+  try {
+    const res = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query VodChat($id: ID!, $offset: Int!) {
+  video(id: $id) {
+    comments(contentOffsetSeconds: $offset) {
+      edges {
+        node {
+          id
+          contentOffsetSeconds
+          commenter { login displayName }
+          message { userColor fragments { text emote { emoteID } } }
+        }
+      }
+      pageInfo { hasNextPage }
+    }
+  }
+}`,
+        variables: { id: videoId, offset }
+      }),
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (!res.ok) return empty
+
+    // Read as text first: the payload size is the number worth reporting, and
+    // content-length is absent on a chunked response.
+    const raw = await res.text()
+    const bytes = Buffer.byteLength(raw)
+    const body = JSON.parse(raw) as {
+      data?: {
+        video?: {
+          comments?: {
+            edges?: {
+              node?: {
+                id?: string
+                contentOffsetSeconds?: number
+                commenter?: { login?: string; displayName?: string } | null
+                message?: { userColor?: string | null; fragments?: CommentFragment[] } | null
+              }
+            }[]
+            pageInfo?: { hasNextPage?: boolean }
+          } | null
+        } | null
+      }
+      errors?: unknown
+    }
+    if (body.errors || !body.data?.video) return { ...empty, bytes }
+
+    const comments = body.data.video.comments
+    const messages: VodChatMessage[] = []
+    for (const edge of comments?.edges ?? []) {
+      const n = edge?.node
+      if (!n?.id) continue
+      // A deleted account leaves its messages behind with no commenter.
+      const login = n.commenter?.login ?? ''
+      messages.push({
+        id: n.id,
+        offset: n.contentOffsetSeconds ?? 0,
+        login,
+        display: n.commenter?.displayName ?? login ?? 'unknown',
+        color: n.message?.userColor ?? null,
+        ...assemble(n.message?.fragments ?? [])
+      })
+    }
+
+    const last = messages[messages.length - 1]
+    return {
+      messages,
+      // Not last.offset + 1: a second can hold more messages than one page, and
+      // skipping past it would drop them. The overlap is the caller's to dedupe.
+      nextOffset: last ? last.offset : offset,
+      hasMore: comments?.pageInfo?.hasNextPage !== false,
+      bytes,
+      failed: false
+    }
+  } catch {
+    return empty
+  }
+}
+
+/**
+ * Fragments to the shape the log already draws: one body string plus emote ranges.
+ *
+ * The ranges are in **code points**, because that is what the renderer indexes by -
+ * it has to be, since Twitch's IRC tag is in code points and any message with an
+ * emoji would otherwise draw its emotes in the wrong place. `[...text].length` is
+ * the length that matters here, never `text.length`.
+ *
+ * Exported for its own sake: this is a function with one trap in it, and a real
+ * VOD will not reliably hand you a message with an emoji *and* a Twitch emote to
+ * prove it on. Synthetic input does, in a millisecond.
+ */
+export function assemble(fragments: CommentFragment[]): {
+  body: string
+  emotes: VodChatMessage['emotes']
+} {
+  let body = ''
+  let cursor = 0
+  const emotes: VodChatMessage['emotes'] = []
+
+  for (const f of fragments) {
+    const text = f.text ?? ''
+    const length = [...text].length
+    if (f.emote?.emoteID && length)
+      emotes.push({ id: f.emote.emoteID, start: cursor, end: cursor + length - 1 })
+    body += text
+    cursor += length
+  }
+  return { body, emotes }
 }
 
 export interface VodInfo {

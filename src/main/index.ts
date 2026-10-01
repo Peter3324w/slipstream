@@ -9,6 +9,7 @@ import type {
   EmoteSet,
   MemorySample,
   ResolveResult,
+  VodChatPage,
   VodSummary
 } from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
@@ -17,7 +18,7 @@ import { resolveChannel, resolveVod, streamlinkVersion } from './streamlink'
 import { clearVodAccess, vodConnectSources, vodRequestAllowed } from './vod-access'
 import { contentSecurityPolicy } from './csp'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
-import { channelSummaries, channelVods } from './twitch'
+import { channelSummaries, channelVods, vodComments } from './twitch'
 import { addFavourite, listFavourites, removeFavourite, setFavouritesDir } from './favourites'
 import {
   accessToken,
@@ -214,6 +215,12 @@ function registerIpc(): void {
   ipcMain.handle('channels:vods', (_e, login: unknown): Promise<VodSummary[]> => {
     const parsed = typeof login === 'string' ? parseChannelInput(login) : null
     return parsed ? channelVods(parsed) : Promise.resolve([])
+  })
+
+  ipcMain.handle('vod:comments', (_e, id: unknown, offset: unknown): Promise<VodChatPage> => {
+    const empty: VodChatPage = { messages: [], nextOffset: 0, hasMore: false, bytes: 0, failed: true }
+    if (typeof id !== 'string' || !/^\d{1,15}$/.test(id)) return Promise.resolve(empty)
+    return vodComments(id, typeof offset === 'number' && Number.isFinite(offset) ? offset : 0)
   })
 
   ipcMain.handle('favourites:list', (): Promise<string[]> => listFavourites())

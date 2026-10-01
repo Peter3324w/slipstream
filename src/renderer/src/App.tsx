@@ -13,6 +13,7 @@ import { Player, type QualityLevel } from './player/hls'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
 import { ChatSync } from './chat/sync'
+import { VodChat, type VodChatState } from './chat/vodChat'
 import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
@@ -49,14 +50,8 @@ const TWITCH_EMOTES_OFF_KEY = 'slipstream.twitchEmotesOff'
 /** Stored as "off" only; sync is the default. */
 const CHAT_SYNC_OFF_KEY = 'slipstream.chatSyncOff'
 
-/**
- * Said once, in the log, whenever a VOD is what is playing. Twitch keeps the chat
- * that was said at the time and it can be replayed by offset, but that is a second
- * piece of work - and until it exists, silence with a reason beats live messages
- * pretending to belong to a broadcast that finished days ago.
- */
-const VOD_CHAT_NOTE =
-  'This is a VOD, so chat is off: live messages would not be what was said at the time. Chat replay is not built yet.'
+/** Said once, in the log, so replay is never mistaken for a live room. */
+const VOD_CHAT_NOTE = 'Replaying chat as it was said. Pause or seek and it follows the video.'
 
 /** A saved favourite Twitch has not been asked about yet, or could not answer for. */
 function unchecked(login: string): ChannelSummary {
@@ -218,6 +213,11 @@ export default function App(): React.JSX.Element {
    */
   const targetRef = useRef<WatchTarget | null>(null)
   const vodRef = useRef(false)
+  /** The VOD being replayed, and whose channel's emotes it draws with. */
+  const vodIdRef = useRef<string | null>(null)
+  const vodLoginRef = useRef<string | null>(null)
+  const vodChatRef = useRef<VodChat | null>(null)
+  const [vodChatState, setVodChatState] = useState<VodChatState>('idle')
   const [emoteBytes, setEmoteBytes] = useState(0)
   const [emoteCounts, setEmoteCounts] = useState<Record<EmoteProvider, number>>({
     '7tv': 0,
@@ -392,15 +392,28 @@ export default function App(): React.JSX.Element {
     if (listRef.current) listRef.current.emotes = null
 
     if (result.stream.kind === 'vod') {
-      // Live chat beside a three-day-old VOD is not what was said at the time, and
-      // the sync clock would hold all of it anyway: a VOD's PROGRAM-DATE-TIME is the
-      // original broadcast, so nothing arriving now ever catches up to it.
+      // The live room is the wrong room: it is not what was said at the time, and
+      // the sync clock would hold all of it anyway, since a VOD's PROGRAM-DATE-TIME
+      // is the original broadcast and nothing arriving now ever catches up to it.
       chatRef.current?.disconnect()
       setChatState('idle')
-      setChannel(result.stream.channel.login || null)
-      listRef.current?.system(VOD_CHAT_NOTE)
+      const broadcaster = result.stream.channel.login || null
+      setChannel(broadcaster)
+      vodIdRef.current = result.stream.video?.id ?? null
+      vodLoginRef.current = broadcaster
+
+      if (!chatClosedRef.current && vodIdRef.current) {
+        listRef.current?.system(VOD_CHAT_NOTE)
+        vodChatRef.current?.start(vodIdRef.current)
+        // Replay draws through the same log, so third-party emotes apply to it.
+        if (broadcaster) void loadEmotes(broadcaster)
+      }
       return
     }
+
+    vodIdRef.current = null
+    vodLoginRef.current = null
+    vodChatRef.current?.stop()
 
     if (!chatClosedRef.current && login) {
       listRef.current?.system(`Joining #${login}...`)
@@ -415,6 +428,7 @@ export default function App(): React.JSX.Element {
     setChatBytes(0)
     localStorage.setItem(CHAT_CLOSED_KEY, '1')
     chatRef.current?.disconnect()
+    vodChatRef.current?.stop()
     // Drop the message nodes too - a closed chat should not still be holding
     // 250 elements and their emote images.
     syncRef.current?.reset()
@@ -432,9 +446,11 @@ export default function App(): React.JSX.Element {
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login, credentials)
       void loadEmotes(login)
-    } else if (vodRef.current) {
-      // Nothing to join, and saying so beats a pane that just sits there empty.
+    } else if (vodRef.current && vodIdRef.current) {
+      syncRef.current?.reset()
       listRef.current?.system(VOD_CHAT_NOTE)
+      vodChatRef.current?.start(vodIdRef.current)
+      if (vodLoginRef.current) void loadEmotes(vodLoginRef.current)
     }
   }, [loadEmotes, credentials])
 
@@ -496,7 +512,10 @@ export default function App(): React.JSX.Element {
     // Clearing the ref also makes any in-flight resolve discard itself.
     targetRef.current = null
     vodRef.current = false
+    vodIdRef.current = null
+    vodLoginRef.current = null
     loginRef.current = null
+    vodChatRef.current?.stop()
     // Hand back the VOD's CORS grant; nothing is playing that needs it.
     if (bridgeReady()) void window.slipstream.release().catch(() => undefined)
     setChannel(null)
@@ -552,6 +571,16 @@ export default function App(): React.JSX.Element {
     sync.setEnabled(!readFlag(CHAT_SYNC_OFF_KEY))
     syncRef.current = sync
 
+    // Replay runs on the video's own position rather than a wall clock, so it
+    // needs no latency guess at all: a comment's offset IS where it belongs.
+    const vodChat = new VodChat(
+      list,
+      () => (vodRef.current && video.duration > 0 ? video.currentTime : null),
+      (id, offset) => window.slipstream.vodComments(id, offset),
+      (state) => setVodChatState(state)
+    )
+    vodChatRef.current = vodChat
+
     const chat = new TwitchChat({
       onMessage: (m) => sync.push(m),
       onSystem: (t) => list.system(t),
@@ -585,8 +614,10 @@ export default function App(): React.JSX.Element {
       traffic.stop()
       player.destroy()
       chat.disconnect()
+      vodChat.destroy()
       sync.destroy()
       list.destroy()
+      vodChatRef.current = null
       syncRef.current = null
       playerRef.current = null
       chatRef.current = null
@@ -698,7 +729,13 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     if (chatClosed) return
     const id = setInterval(() => {
-      setChatBytes(chatRef.current?.bytesReceived ?? 0)
+      // Replay's payload belongs in the same readout as the socket's: it answers
+      // the same question, "what is chat costing me".
+      setChatBytes(
+        vodRef.current
+          ? (vodChatRef.current?.bytesReceived ?? 0)
+          : (chatRef.current?.bytesReceived ?? 0)
+      )
       setEmoteBytes(trafficRef.current?.total ?? 0)
     }, 1000)
     return () => clearInterval(id)
@@ -1003,6 +1040,8 @@ export default function App(): React.JSX.Element {
         bytes={chatBytes}
         onClose={closeChat}
         onConnect={openChat}
+        vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
+        vodState={vodChatState}
         emoteProviders={emoteProviders}
         emoteCounts={emoteCounts}
         emoteBytes={emoteBytes}
