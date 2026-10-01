@@ -14,6 +14,8 @@ interface Props {
   onSeek: (delta: number) => void
   /** The scrubbable window, in media seconds. */
   dvr: { start: number; end: number; current: number }
+  /** A VOD scrubs against its length; live scrubs against the rewind buffer. */
+  vod: boolean
   onSeekTo: (time: number) => void
   onJumpLive: () => void
   volume: number
@@ -85,6 +87,7 @@ export function Controls(props: Props): React.JSX.Element {
         end={props.dvr.end}
         current={props.dvr.current}
         disabled={!props.ready}
+        vod={props.vod}
         onSeek={props.onSeekTo}
         onJumpLive={props.onJumpLive}
       />

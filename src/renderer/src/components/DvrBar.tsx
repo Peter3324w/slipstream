@@ -7,26 +7,43 @@ interface Props {
   end: number
   current: number
   disabled: boolean
+  /**
+   * A finished broadcast: the track spans a real duration, every second of it is
+   * seekable, and there is no live edge to be behind.
+   */
+  vod: boolean
   onSeek: (time: number) => void
   onJumpLive: () => void
 }
 
 function clock(seconds: number): string {
   const s = Math.max(0, Math.round(seconds))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0')
+  const ss = String(s % 60).padStart(2, '0')
+  // Hours only when there are hours: a 14h VOD needs them, a 2 minute buffer does not.
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${mm}:${ss}` : `${Number(mm)}:${ss}`
 }
 
 /**
  * The DVR scrubber.
  *
- * Unlike a VOD bar there is no duration to scrub against - the track spans the
- * rewind buffer, whose floor keeps moving forward as hls.js trims it. So the
- * left label is how far back you can still go, and the right end is always now.
+ * Live has no duration to scrub against: the track spans the rewind buffer, whose
+ * floor keeps moving forward as hls.js trims it, so the left label is how far back
+ * you can still go and the right end is always now. A VOD is the ordinary case -
+ * elapsed on the left, total on the right - because its playlist ends.
  *
  * Dragging previews rather than seeking continuously: a seek per pointermove
  * would have the demuxer re-buffering the whole way across the bar.
  */
-export function DvrBar({ start, end, current, disabled, onSeek, onJumpLive }: Props): React.JSX.Element {
+export function DvrBar({
+  start,
+  end,
+  current,
+  disabled,
+  vod,
+  onSeek,
+  onJumpLive
+}: Props): React.JSX.Element {
   const track = useRef<HTMLDivElement>(null)
   const [preview, setPreview] = useState<number | null>(null)
 
@@ -66,7 +83,9 @@ export function DvrBar({ start, end, current, disabled, onSeek, onJumpLive }: Pr
 
   return (
     <div className={`dvr ${disabled ? 'is-disabled' : ''}`}>
-      <span className="dvr-time">{disabled ? '--:--' : `-${clock(end - start)}`}</span>
+      <span className="dvr-time">
+        {disabled ? '--:--' : vod ? clock(position - start) : `-${clock(end - start)}`}
+      </span>
 
       <div
         ref={track}
@@ -76,7 +95,7 @@ export function DvrBar({ start, end, current, disabled, onSeek, onJumpLive }: Pr
         onPointerUp={commit}
         onPointerCancel={() => setPreview(null)}
         role="slider"
-        aria-label="Seek within the rewind buffer"
+        aria-label={vod ? 'Seek within the VOD' : 'Seek within the rewind buffer'}
         aria-valuemin={0}
         aria-valuemax={Math.round(span)}
         aria-valuenow={Math.round(position - start)}
@@ -85,19 +104,25 @@ export function DvrBar({ start, end, current, disabled, onSeek, onJumpLive }: Pr
         <div className="dvr-thumb" style={{ left: `${fraction * 100}%` }} />
         {preview !== null && (
           <div className="dvr-bubble" style={{ left: `${fraction * 100}%` }}>
-            {behind < 1 ? 'live' : `-${clock(behind)}`}
+            {vod ? clock(position - start) : behind < 1 ? 'live' : `-${clock(behind)}`}
           </div>
         )}
       </div>
 
-      <button
-        className={`dvr-time dvr-live ${behind < 5 ? 'is-live' : ''}`}
-        onClick={onJumpLive}
-        disabled={disabled || behind < 5}
-        title="Jump to the live edge  (L)"
-      >
-        {disabled ? '--:--' : behind < 5 ? 'LIVE' : `-${clock(behind)}`}
-      </button>
+      {vod ? (
+        <span className="dvr-time" title="Total length">
+          {disabled ? '--:--' : clock(end - start)}
+        </span>
+      ) : (
+        <button
+          className={`dvr-time dvr-live ${behind < 5 ? 'is-live' : ''}`}
+          onClick={onJumpLive}
+          disabled={disabled || behind < 5}
+          title="Jump to the live edge  (L)"
+        >
+          {disabled ? '--:--' : behind < 5 ? 'LIVE' : `-${clock(behind)}`}
+        </button>
+      )}
     </div>
   )
 }

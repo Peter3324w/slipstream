@@ -12,6 +12,20 @@ export interface ChannelMeta {
 }
 
 export interface ResolvedStream {
+  /**
+   * A finished broadcast plays by the same path but behaves differently: the
+   * playlist carries EXT-X-ENDLIST, so it has a real duration and seeks anywhere,
+   * and there is no live edge to jump to.
+   */
+  kind: 'live' | 'vod'
+  /** Set for a VOD: Twitch's video id, and what it knows about it. */
+  video?: {
+    id: string
+    /** From the playlist where Twitch reports it; null when it did not. */
+    durationSeconds: number | null
+    /** Epoch ms of the original broadcast. */
+    recordedAt: number | null
+  }
   channel: ChannelMeta
   /**
    * The raw master playlist. The renderer turns this into a Blob URL for hls.js.
@@ -30,6 +44,8 @@ export interface ResolvedStream {
 export type ResolveFailure =
   | 'offline'
   | 'not_found'
+  /** A sub-only VOD, or one Twitch will not serve to an anonymous viewer. */
+  | 'restricted'
   | 'streamlink_missing'
   | 'invalid_channel'
   | 'error'

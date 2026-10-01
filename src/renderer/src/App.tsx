@@ -8,7 +8,7 @@ import type {
   ResolvedStream
 } from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
-import { parseChannelInput } from '@shared/channel'
+import { parseWatchInput, type WatchTarget } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
@@ -48,6 +48,15 @@ const EMOTES_KEY = 'slipstream.emotes'
 const TWITCH_EMOTES_OFF_KEY = 'slipstream.twitchEmotesOff'
 /** Stored as "off" only; sync is the default. */
 const CHAT_SYNC_OFF_KEY = 'slipstream.chatSyncOff'
+
+/**
+ * Said once, in the log, whenever a VOD is what is playing. Twitch keeps the chat
+ * that was said at the time and it can be replayed by offset, but that is a second
+ * piece of work - and until it exists, silence with a reason beats live messages
+ * pretending to belong to a broadcast that finished days ago.
+ */
+const VOD_CHAT_NOTE =
+  'This is a VOD, so chat is off: live messages would not be what was said at the time. Chat replay is not built yet.'
 
 /** A saved favourite Twitch has not been asked about yet, or could not answer for. */
 function unchecked(login: string): ChannelSummary {
@@ -110,8 +119,16 @@ function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<
  * pretending the app works - say so, and say that it is a build problem, because
  * it looks exactly like a network one.
  */
+/** "recorded 3 days ago", for the VOD badge's tooltip. */
+function vodAge(recordedAt: number | null | undefined): string {
+  if (!recordedAt) return 'A past broadcast'
+  const days = Math.floor((Date.now() - recordedAt) / 86_400_000)
+  if (days <= 0) return 'Recorded today'
+  return `Recorded ${days} day${days === 1 ? '' : 's'} ago`
+}
+
 function bridgeReady(): boolean {
-  return typeof window.slipstream?.resolveChannel === 'function'
+  return typeof window.slipstream?.resolve === 'function'
 }
 
 export default function App(): React.JSX.Element {
@@ -193,6 +210,14 @@ export default function App(): React.JSX.Element {
    */
   const [twitchEmotes, setTwitchEmotes] = useState(() => !readFlag(TWITCH_EMOTES_OFF_KEY))
   const twitchEmotesRef = useRef(twitchEmotes)
+
+  /**
+   * What is being watched, and the token that makes a slow resolve discard itself.
+   * Separate from loginRef, which means something narrower: the channel whose chat
+   * and emotes are live. A VOD has neither, so that one stays null.
+   */
+  const targetRef = useRef<WatchTarget | null>(null)
+  const vodRef = useRef(false)
   const [emoteBytes, setEmoteBytes] = useState(0)
   const [emoteCounts, setEmoteCounts] = useState<Record<EmoteProvider, number>>({
     '7tv': 0,
@@ -303,11 +328,17 @@ export default function App(): React.JSX.Element {
   )
 
   const start = useCallback(async (raw: string): Promise<void> => {
-    const login = parseChannelInput(raw)
-    if (!login) {
-      setPhase({ kind: 'error', reason: 'invalid_channel', message: 'That does not look like a channel name.' })
+    const target = parseWatchInput(raw)
+    if (!target) {
+      setPhase({
+        kind: 'error',
+        reason: 'invalid_channel',
+        message: 'That does not look like a channel name or a VOD link.'
+      })
       return
     }
+    const isVod = target.kind === 'vod'
+    const login = isVod ? null : target.login
 
     if (!bridgeReady()) {
       setPhase({
@@ -319,20 +350,22 @@ export default function App(): React.JSX.Element {
       return
     }
 
+    targetRef.current = target
+    vodRef.current = isVod
     loginRef.current = login
     setChannel(login)
-    setPhase({ kind: 'resolving', channel: login })
+    setPhase({ kind: 'resolving', channel: isVod ? `that VOD` : target.login })
     setLevels([])
 
     let result: ResolveResult
     try {
       result = await withTimeout(
-        window.slipstream.resolveChannel(login),
+        window.slipstream.resolve(raw),
         RESOLVE_TIMEOUT_MS,
         'streamlink did not answer within 60 seconds.'
       )
     } catch (err) {
-      if (loginRef.current !== login) return
+      if (targetRef.current !== target) return
       setPhase({
         kind: 'error',
         reason: 'error',
@@ -342,7 +375,7 @@ export default function App(): React.JSX.Element {
     }
 
     // The user may have moved on while streamlink was working.
-    if (loginRef.current !== login) return
+    if (targetRef.current !== target) return
 
     if (!result.ok) {
       setPhase({ kind: 'error', reason: result.reason, message: result.message })
@@ -357,12 +390,24 @@ export default function App(): React.JSX.Element {
     // Drop the previous channel's emote table. Until the new one arrives this
     // would otherwise render channel A's emotes inside channel B's chat.
     if (listRef.current) listRef.current.emotes = null
-    if (!chatClosedRef.current) {
+
+    if (result.stream.kind === 'vod') {
+      // Live chat beside a three-day-old VOD is not what was said at the time, and
+      // the sync clock would hold all of it anyway: a VOD's PROGRAM-DATE-TIME is the
+      // original broadcast, so nothing arriving now ever catches up to it.
+      chatRef.current?.disconnect()
+      setChatState('idle')
+      setChannel(result.stream.channel.login || null)
+      listRef.current?.system(VOD_CHAT_NOTE)
+      return
+    }
+
+    if (!chatClosedRef.current && login) {
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login, credentials)
       void loadEmotes(login)
     }
-  }, [loadEmotes])
+  }, [loadEmotes, credentials])
 
   const closeChat = useCallback((): void => {
     chatClosedRef.current = true
@@ -387,6 +432,9 @@ export default function App(): React.JSX.Element {
       listRef.current?.system(`Joining #${login}...`)
       chatRef.current?.connect(login, credentials)
       void loadEmotes(login)
+    } else if (vodRef.current) {
+      // Nothing to join, and saying so beats a pane that just sits there empty.
+      listRef.current?.system(VOD_CHAT_NOTE)
     }
   }, [loadEmotes, credentials])
 
@@ -434,6 +482,7 @@ export default function App(): React.JSX.Element {
 
   const cancel = useCallback((): void => {
     // Clearing the ref makes any in-flight resolve discard itself on return.
+    targetRef.current = null
     loginRef.current = null
     setChannel(null)
     setPhase({ kind: 'idle' })
@@ -445,7 +494,11 @@ export default function App(): React.JSX.Element {
    */
   const stop = useCallback((): void => {
     // Clearing the ref also makes any in-flight resolve discard itself.
+    targetRef.current = null
+    vodRef.current = false
     loginRef.current = null
+    // Hand back the VOD's CORS grant; nothing is playing that needs it.
+    if (bridgeReady()) void window.slipstream.release().catch(() => undefined)
     setChannel(null)
     setPhase({ kind: 'idle' })
     playerRef.current?.stop()
@@ -463,19 +516,19 @@ export default function App(): React.JSX.Element {
 
   /** Re-run the token dance and swap the manifest without disturbing chat. */
   const refresh = useCallback(async (): Promise<void> => {
-    const login = loginRef.current
-    if (!login) return
+    const target = targetRef.current
+    if (!target) return
     let result: ResolveResult
     try {
       result = await withTimeout(
-        window.slipstream.resolveChannel(login),
+        window.slipstream.resolve(target.kind === 'vod' ? `videos/${target.id}` : target.login),
         RESOLVE_TIMEOUT_MS,
         'streamlink did not answer within 60 seconds.'
       )
     } catch {
       return // the stream is still playing; a failed refresh is not worth a teardown
     }
-    if (loginRef.current !== login) return
+    if (targetRef.current !== target) return
     if (result.ok) {
       setPhase({ kind: 'playing', stream: result.stream })
       playerRef.current?.load(result.stream.masterPlaylist)
@@ -770,7 +823,7 @@ export default function App(): React.JSX.Element {
         >
           <input
             className="channel-input"
-            placeholder="channel or twitch.tv link"
+            placeholder="channel, or a twitch.tv/videos link"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             spellCheck={false}
@@ -783,7 +836,13 @@ export default function App(): React.JSX.Element {
 
         {stream && (
           <div className="now-playing">
-            <span className="live-dot">live</span>
+            {stream.kind === 'vod' ? (
+              <span className="vod-dot" title={vodAge(stream.video?.recordedAt)}>
+                vod
+              </span>
+            ) : (
+              <span className="live-dot">live</span>
+            )}
             <span className="who">{stream.channel.author}</span>
             <span className="what">
               {stream.channel.category ? `${stream.channel.category} - ` : ''}
@@ -894,6 +953,7 @@ export default function App(): React.JSX.Element {
 
         <Controls
           ready={phase.kind === 'playing'}
+          vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
           playing={playing}
           onPlayPause={togglePlay}
           onStop={stop}

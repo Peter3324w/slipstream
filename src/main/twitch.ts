@@ -55,6 +55,77 @@ export async function lookupChannel(login: string): Promise<ChannelLookup> {
   }
 }
 
+export interface VodInfo {
+  /** The broadcaster's login - not derivable from a display name, which may be
+      in another script entirely (a channel displaying as kanji still has an
+      ASCII login, and lowercasing the display name would invent a channel). */
+  login: string
+  display: string
+  title: string
+  category: string
+  lengthSeconds: number | null
+  recordedAt: number | null
+  /** Sub-only, or otherwise not ours to play. */
+  restricted: boolean
+}
+
+/**
+ * What Twitch knows about one VOD. Never throws: playback does not depend on it,
+ * so a failed lookup costs a nicer header and nothing else.
+ *
+ * A raw query rather than a persisted hash, for the reason given above the
+ * favourites query: the hashes rotate, a field list does not.
+ */
+export async function vodInfo(id: string): Promise<VodInfo | null> {
+  try {
+    const res = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query Vod($id: ID!) {
+  video(id: $id) {
+    title lengthSeconds createdAt
+    game { displayName }
+    owner { login displayName }
+    self { isRestricted }
+  }
+}`,
+        variables: { id }
+      }),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return null
+
+    const body = (await res.json()) as {
+      data?: {
+        video?: {
+          title?: string
+          lengthSeconds?: number
+          createdAt?: string
+          game?: { displayName?: string } | null
+          owner?: { login?: string; displayName?: string } | null
+          self?: { isRestricted?: boolean } | null
+        } | null
+      }
+    }
+    const v = body.data?.video
+    if (!v?.owner?.login) return null
+
+    const recorded = v.createdAt ? Date.parse(v.createdAt) : NaN
+    return {
+      login: v.owner.login,
+      display: v.owner.displayName ?? v.owner.login,
+      title: v.title ?? '',
+      category: v.game?.displayName ?? '',
+      lengthSeconds: typeof v.lengthSeconds === 'number' ? v.lengthSeconds : null,
+      recordedAt: Number.isNaN(recorded) ? null : recorded,
+      restricted: v.self?.isRestricted === true
+    }
+  } catch {
+    return null
+  }
+}
+
 /** Convenience for callers that only care whether the channel exists. */
 export async function channelExistence(login: string): Promise<Existence> {
   return (await lookupChannel(login)).state

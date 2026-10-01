@@ -11,7 +11,10 @@ import type {
   ResolveResult
 } from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
-import { resolveChannel, streamlinkVersion } from './streamlink'
+import { parseWatchInput } from '@shared/channel'
+import { resolveChannel, resolveVod, streamlinkVersion } from './streamlink'
+import { clearVodAccess, vodConnectSources, vodRequestAllowed } from './vod-access'
+import { contentSecurityPolicy } from './csp'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
 import { channelSummaries } from './twitch'
 import { addFavourite, listFavourites, removeFavourite, setFavouritesDir } from './favourites'
@@ -115,32 +118,28 @@ function createWindow(): BrowserWindow {
 }
 
 /**
- * Locks the renderer down to exactly the origins this app needs. Applied only to a
- * packaged build: the Vite dev server needs inline scripts and its own websocket,
- * and weakening the policy to accommodate that would defeat the point of having one.
+ * Response headers, for the two things that have to be decided per response.
  *
- * - media/connect blob:  the master playlist is handed over as a Blob (see types.ts)
- * - *.ttvnw.net          playlists and video segments
- * - static-cdn.jtvnw.net first-party emote images
- * - irc-ws.chat          anonymous chat
+ * Registered in dev as well as in a build, because the CORS grant below is what
+ * makes a VOD playable and dev is where it gets tested.
  */
-function applyCsp(): void {
-  if (isDev) return
-  const policy = [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app https://cdn.betterttv.net https://cdn.frankerfacez.com",
-    "media-src 'self' blob:",
-    "connect-src 'self' blob: https://*.ttvnw.net wss://irc-ws.chat.twitch.tv",
-    "object-src 'none'",
-    "frame-src 'none'"
-  ].join('; ')
-
+function applyResponseHeaders(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [policy] }
-    })
+    const headers = { ...details.responseHeaders }
+
+    // Twitch's VOD CDN sends no access-control-allow-origin, so the renderer can
+    // fetch a segment and then not be allowed to read it. Granted for the one
+    // directory the current VOD lives in; vod-access.ts has the measurements.
+    if (vodRequestAllowed(details.url)) {
+      delete headers['access-control-allow-origin']
+      delete headers['Access-Control-Allow-Origin']
+      headers['Access-Control-Allow-Origin'] = ['*']
+    }
+
+    // A VOD's own host is added only while one is loaded, and only that one.
+    if (!isDev) headers['Content-Security-Policy'] = [contentSecurityPolicy(vodConnectSources())]
+
+    callback({ responseHeaders: headers })
   })
 }
 
@@ -167,11 +166,28 @@ function registerAuthIpc(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('stream:resolve', async (_e, channel: unknown): Promise<ResolveResult> => {
-    if (typeof channel !== 'string')
+  ipcMain.handle('stream:resolve', async (_e, input: unknown): Promise<ResolveResult> => {
+    if (typeof input !== 'string')
       return { ok: false, reason: 'invalid_channel', message: 'Expected a channel name.' }
-    return resolveChannel(channel)
+
+    const target = parseWatchInput(input)
+    if (!target)
+      return {
+        ok: false,
+        reason: 'invalid_channel',
+        message: 'That does not look like a channel name or a VOD link.'
+      }
+
+    // A live channel needs no CDN grant, and leaving the last VOD's one in place
+    // would outlive what asked for it.
+    if (target.kind === 'channel') {
+      clearVodAccess()
+      return resolveChannel(target.login)
+    }
+    return resolveVod(target.id)
   })
+
+  ipcMain.handle('stream:release', (): void => clearVodAccess())
 
   ipcMain.handle(
     'emotes:fetch',
@@ -257,7 +273,7 @@ if (!app.requestSingleInstanceLock()) {
     await loadClientId()
     await restoreSession()
 
-    applyCsp()
+    applyResponseHeaders()
     registerIpc()
     registerAuthIpc()
     createWindow()

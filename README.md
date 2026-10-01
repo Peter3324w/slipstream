@@ -19,6 +19,8 @@ Twitch Interactive, Inc.
 - Pin a quality and it sticks across channels. Auto says what it actually picked (`Auto · 720p60`)
   rather than showing a number it is about to change
 - A DVR scrub bar across the rewind buffer, plus ±10s and jump-to-live
+- **Paste a `twitch.tv/videos/…` link and watch the VOD** — a real duration, seekable end to
+  end, with no rewind-buffer ceiling. Chat replay is not built yet, so chat says so and stays off
 
 **Chat**
 - Read-only, **no account needed** — anonymous IRC
@@ -256,10 +258,14 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 - [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
 - [x] DVR scrub bar across the rewind buffer, with jump-to-live
+- [x] **VOD playback** — see [VODs](#vods). Chat replay is the piece still missing
 - [ ] Configurable buffer length, and ad-skip — both gated on the seek probe below
 
 ### Later
 
+- [ ] **VOD chat replay** — `video(id) { comments(contentOffsetSeconds:) }` returns ~59 comments per
+      request, about 102s of chat for 21KB, paged against `currentTime` rather than `playingDate`.
+      Fragments carry emote *ids*, not ranges over text, so it is less work than the IRC path
 - [ ] VOD downloader — `streamlink --output vod.ts twitch.tv/videos/<id> best`. Clip ranges with `--hls-start-offset` / `--hls-duration`. Remux with the ffmpeg streamlink already bundles
 - [ ] Multi-stream / picture-in-picture
 - [ ] Per-channel buffer and quality defaults
@@ -269,6 +275,64 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 - **Ad blocking via proxies.** Fragile, dependent on someone else's infrastructure, against the Developer Agreement. The delay-and-skip approach is better and stable.
 - **Loading the actual 7TV browser extension.** It injects into twitch.tv's DOM. There is no twitch.tv DOM here. Reimplement against the API instead.
 - **Replacing Twitch.** No clips, no channel points, no raids, no mod tools. Watch streams, read chat, leave.
+
+---
+
+## VODs
+
+A VOD resolves exactly like a live channel — `streamlink --json https://twitch.tv/videos/<id>`
+returns the metadata and a `master` on `usher.ttvnw.net/vod/v2/` — and then stops working one level
+down, for a reason worth writing down.
+
+### Live and VOD do not have the same CORS story
+
+Measured against `summit1g` VOD `2888339949` (14h) and two live channels, with `Origin` sent:
+
+| | master playlist | media playlist | segments |
+|---|---|---|---|
+| **Live** | no ACAO | `*` (`euc12.playlist.ttvnw.net`) | `*` (`*.hls.ttvnw.net`) |
+| **VOD** | no ACAO | **none** (`d1m7jfoe9zdc1j.cloudfront.net`) | **none**, and `OPTIONS` → **403** |
+
+Path A works for live because only the master is missing the header, so main fetches that one file
+and the renderer reads everything below it. A VOD comes off a plain CloudFront distribution — a
+different host per VOD — that sends no CORS headers at all, so the renderer can request a segment
+and then not be allowed to read it. Verified from an http origin inside Electron: the same segment
+reads `TypeError: Failed to fetch` without the grant below and **9,160,347 bytes** with it.
+
+### What it does about that
+
+The alternatives were relaying every segment through main over IPC, or a custom protocol doing the
+same — both put megabytes a second of copying on the hot path of the one app whose whole claim is
+not doing that. So the response gets the header it is missing, for **exactly the directory the VOD
+being watched lives in**: the master names its media playlists absolutely, every segment sits beside
+one of them, and the grant is revoked the moment another channel or VOD is resolved. The packaged
+build's CSP adds that one origin to `connect-src` the same way, and drops it again. See
+`src/main/vod-access.ts`; the scoping is unit-tested, including a `cloudfront.net.evil.com` prefix
+spoof.
+
+> Note for anyone reading this as a security claim: a `file://` page — which is what the packaged
+> build loads — turned out not to have CORS enforced against it at all, so in a build the grant is
+> belt-and-braces. It is the dev renderer, on `http://localhost`, where it is load-bearing. Relying
+> on the `file://` quirk instead would be relying on a Chromium detail nobody promised us.
+
+### What a VOD gives you that live cannot
+
+- `#EXT-X-ENDLIST` and the full segment list (5048 of them for that 14h VOD), so **every second is
+  seekable**. `BACK_BUFFER_SECONDS` is not a ceiling here — the limitation at
+  [Rewind / DVR](#rewind--dvr) does not apply to an archived channel
+- `#EXT-X-PROGRAM-DATE-TIME` is present on VODs too, so `playingDate()` keeps working unchanged
+- Muted ranges are visible in the playlist (54 of those 5048 segments, `-muted` in the name). Not
+  surfaced yet; the DVR bar could mark them rather than letting you walk into silence
+
+### What it deliberately does not do
+
+Chat. Twitch keeps what was said and it can be replayed by offset, but live chat beside a three-day
+old VOD is not that, and the sync clock would hold all of it anyway: a VOD's `PROGRAM-DATE-TIME` is
+the original broadcast, so nothing arriving now ever catches up to it. Chat says that, in the log,
+and stays off until replay exists.
+
+Sub-only VODs (`self { isRestricted }`) need an authenticated token and come back as
+`restricted` — untested, since the test account subscribes to nobody.
 
 ---
 

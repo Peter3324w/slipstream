@@ -14,8 +14,10 @@ import type {
  * three read-only calls, no event emitters, nothing that takes a path or a URL.
  */
 const api = {
-  resolveChannel: (channel: string): Promise<ResolveResult> =>
-    ipcRenderer.invoke('stream:resolve', channel),
+  /** A channel name, a twitch.tv link, or a twitch.tv/videos/<id> VOD link. */
+  resolve: (input: string): Promise<ResolveResult> => ipcRenderer.invoke('stream:resolve', input),
+  /** Playback stopped: drop the CORS grant a VOD needed (see main/vod-access.ts). */
+  release: (): Promise<void> => ipcRenderer.invoke('stream:release'),
   fetchEmotes: (channel: string, providers: EmoteProvider[]): Promise<EmoteSet> =>
     ipcRenderer.invoke('emotes:fetch', channel, providers),
   favourites: {
