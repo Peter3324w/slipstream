@@ -946,6 +946,8 @@ export default function App(): React.JSX.Element {
               reason={phase.reason}
               message={phase.message}
               onRetry={channel ? () => void start(channel) : undefined}
+              login={channel ?? undefined}
+              onPickVod={(id) => void start(`videos/${id}`)}
             />
           )}
           {hudVisible && <MemoryHud />}

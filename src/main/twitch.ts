@@ -11,7 +11,7 @@
  * tab and the same one streamlink itself sends. It is not a credential, and nothing
  * here is authenticated: the query asks only whether a login resolves to a user.
  */
-import type { ChannelSummary } from '@shared/types'
+import type { ChannelSummary, VodSummary } from '@shared/types'
 
 const GQL = 'https://gql.twitch.tv/gql'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
@@ -52,6 +52,74 @@ export async function lookupChannel(login: string): Promise<ChannelLookup> {
     return { state: user.stream ? 'live' : 'offline', userId: user.id ?? null }
   } catch {
     return { state: 'unknown', userId: null }
+  }
+}
+
+/**
+ * A channel's recent broadcasts, newest first.
+ *
+ * ARCHIVE only: highlights and uploads are someone's edit, not the stream that
+ * was missed. Raw query rather than a persisted hash, for the reason above the
+ * favourites query - the hashes rotate, a field list does not.
+ *
+ * Never throws. "Not live" is already a disappointment; it does not need an
+ * error on top of it, so a failed lookup is simply an empty list.
+ */
+export async function channelVods(login: string, first = 8): Promise<VodSummary[]> {
+  try {
+    const res = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query Vods($login: String!, $first: Int!) {
+  user(login: $login) {
+    videos(first: $first, sort: TIME, type: ARCHIVE) {
+      edges { node { id title lengthSeconds createdAt viewCount self { isRestricted } } }
+    }
+  }
+}`,
+        variables: { login, first }
+      }),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return []
+
+    const body = (await res.json()) as {
+      data?: {
+        user?: {
+          videos?: {
+            edges?: {
+              node?: {
+                id?: string
+                title?: string
+                lengthSeconds?: number
+                createdAt?: string
+                viewCount?: number
+                self?: { isRestricted?: boolean } | null
+              }
+            }[]
+          } | null
+        } | null
+      }
+    }
+
+    const out: VodSummary[] = []
+    for (const edge of body.data?.user?.videos?.edges ?? []) {
+      const n = edge?.node
+      if (!n?.id) continue
+      const created = n.createdAt ? Date.parse(n.createdAt) : NaN
+      out.push({
+        id: n.id,
+        title: n.title ?? '',
+        length: n.lengthSeconds ?? 0,
+        createdAt: Number.isNaN(created) ? 0 : created,
+        views: n.viewCount ?? 0,
+        restricted: n.self?.isRestricted === true
+      })
+    }
+    return out
+  } catch {
+    return []
   }
 }
 

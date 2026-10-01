@@ -173,6 +173,68 @@ input { font: inherit; color: inherit; }
 }
 .placeholder.is-error .glyph { background: rgba(240, 85, 106, 0.12); color: var(--live); }
 
+/* Past broadcasts, offered on the "not live" screen. */
+.vods-note { font-size: 12px; color: var(--text-faint) !important; }
+.vods { width: min(460px, 100%); display: flex; flex-direction: column; gap: 8px; }
+.vods-head {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint) !important;
+}
+.vods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Eight is a lot of rows on a short window; let the rest scroll rather than
+     pushing Try again off the bottom. */
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.vod-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.vod-row:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border); }
+.vod-row:disabled { opacity: 0.5; cursor: default; }
+.vod-title {
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vod-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.vod-len { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.vod-sub {
+  padding: 0 5px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .spinner {
   width: 26px; height: 26px; border-radius: 99px;
   border: 2px solid var(--surface-3);

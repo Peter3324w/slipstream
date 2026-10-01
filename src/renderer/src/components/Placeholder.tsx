@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ResolveFailure } from '@shared/types'
 import { Alert, Satellite } from './Icons'
+import { VodList } from './VodList'
 
 interface Props {
   kind: 'idle' | 'resolving' | 'error'
@@ -9,6 +10,9 @@ interface Props {
   message?: string
   onCancel?: () => void
   onRetry?: () => void
+  /** Offline is not a dead end while the channel still has VODs. */
+  login?: string
+  onPickVod?: (id: string) => void
 }
 
 /** Measured: streamlink takes roughly 8s on a live channel from a warm cache. */
@@ -65,6 +69,10 @@ export function Placeholder(props: Props): React.JSX.Element {
             <code>winget install --id Streamlink.Streamlink --source winget</code>
           </p>
         )}
+        {props.reason === 'offline' && props.login && props.onPickVod && (
+          <VodList login={props.login} onPick={props.onPickVod} />
+        )}
+
         {props.onRetry && (
           <button className="btn" onClick={props.onRetry}>
             Try again

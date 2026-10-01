@@ -21,6 +21,8 @@ Twitch Interactive, Inc.
 - A DVR scrub bar across the rewind buffer, plus ±10s and jump-to-live
 - **Paste a `twitch.tv/videos/…` link and watch the VOD** — a real duration, seekable end to
   end, with no rewind-buffer ceiling. Chat replay is not built yet, so chat says so and stays off
+- **"Not live" lists that channel's past broadcasts**, so an offline favourite is one click from
+  something to watch rather than a trip to the website to find a video id
 
 **Chat**
 - Read-only, **no account needed** — anonymous IRC
@@ -323,6 +325,17 @@ spoof.
 - `#EXT-X-PROGRAM-DATE-TIME` is present on VODs too, so `playingDate()` keeps working unchanged
 - Muted ranges are visible in the playlist (54 of those 5048 segments, `-muted` in the name). Not
   surfaced yet; the DVR bar could mark them rather than letting you walk into silence
+
+### Finding one
+
+A video id is not something anyone knows, so "not live" offers the channel's last eight broadcasts
+instead — `user(login) { videos(first:, sort: TIME, type: ARCHIVE) }`, one request, no persisted
+hash. ARCHIVE only: highlights and uploads are someone's edit, not the stream that was missed.
+Subscriber-only rows are labelled and not clickable, because Twitch will not serve them to an
+anonymous viewer and failing after the click is worse than saying so before it.
+
+That screen used to be a dead end with a Try again button, which sent you to twitch.tv to find an
+id and paste it back — the exact errand this app exists to save.
 
 ### What it deliberately does not do
 

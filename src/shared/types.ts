@@ -126,6 +126,19 @@ export interface AuthStatus {
   persistent: boolean
 }
 
+/** One past broadcast, trimmed to what it takes to choose one. */
+export interface VodSummary {
+  id: string
+  title: string
+  /** Seconds. */
+  length: number
+  /** Epoch ms of the original broadcast. */
+  createdAt: number
+  views: number
+  /** Subscriber-only: Twitch will not serve it to an anonymous viewer. */
+  restricted: boolean
+}
+
 /** One row in the favourites list. */
 export interface ChannelSummary {
   login: string

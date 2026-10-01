@@ -6,7 +6,8 @@ import type {
   EmoteProvider,
   EmoteSet,
   MemorySample,
-  ResolveResult
+  ResolveResult,
+  VodSummary
 } from '@shared/types'
 
 /**
@@ -18,6 +19,8 @@ const api = {
   resolve: (input: string): Promise<ResolveResult> => ipcRenderer.invoke('stream:resolve', input),
   /** Playback stopped: drop the CORS grant a VOD needed (see main/vod-access.ts). */
   release: (): Promise<void> => ipcRenderer.invoke('stream:release'),
+  /** A channel's recent past broadcasts, newest first. Empty if the lookup failed. */
+  vods: (login: string): Promise<VodSummary[]> => ipcRenderer.invoke('channels:vods', login),
   fetchEmotes: (channel: string, providers: EmoteProvider[]): Promise<EmoteSet> =>
     ipcRenderer.invoke('emotes:fetch', channel, providers),
   favourites: {

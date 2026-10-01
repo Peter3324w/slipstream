@@ -8,15 +8,16 @@ import type {
   EmoteProvider,
   EmoteSet,
   MemorySample,
-  ResolveResult
+  ResolveResult,
+  VodSummary
 } from '@shared/types'
 import { EMOTE_PROVIDERS } from '@shared/types'
-import { parseWatchInput } from '@shared/channel'
+import { parseChannelInput, parseWatchInput } from '@shared/channel'
 import { resolveChannel, resolveVod, streamlinkVersion } from './streamlink'
 import { clearVodAccess, vodConnectSources, vodRequestAllowed } from './vod-access'
 import { contentSecurityPolicy } from './csp'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
-import { channelSummaries } from './twitch'
+import { channelSummaries, channelVods } from './twitch'
 import { addFavourite, listFavourites, removeFavourite, setFavouritesDir } from './favourites'
 import {
   accessToken,
@@ -209,6 +210,11 @@ function registerIpc(): void {
       }
     }
   )
+
+  ipcMain.handle('channels:vods', (_e, login: unknown): Promise<VodSummary[]> => {
+    const parsed = typeof login === 'string' ? parseChannelInput(login) : null
+    return parsed ? channelVods(parsed) : Promise.resolve([])
+  })
 
   ipcMain.handle('favourites:list', (): Promise<string[]> => listFavourites())
   ipcMain.handle('favourites:add', (_e, login: unknown): Promise<string[]> =>
