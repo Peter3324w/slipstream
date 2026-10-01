@@ -273,20 +273,39 @@ input { font: inherit; color: inherit; }
   border-bottom: 0;
 }
 .app.chat-collapsed .chat-body { display: none; }
-.chat-head .chat-state-dot { margin-left: 0; }
 .chat-head .chat-state-dot::before { width: 7px; height: 7px; }
 
 .chat-head {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 7px;
   height: 38px; padding: 0 12px;
   border-bottom: 1px solid var(--border-soft);
   font-size: 12px; font-weight: 600; color: var(--text-dim);
   letter-spacing: 0.02em;
 }
+
+/*
+ * The header has a hard width budget: the pane is a fixed 340px, which leaves
+ * 315px inside the padding, and measured in Segoe UI the toggle, byte readout,
+ * both pills, the status and the Power button already want 351px of it - before
+ * the channel name. The row overflowed, .chat clips its overflow, and the first
+ * thing off the end was Power: it sat 91px outside the pane and could not be
+ * clicked at all once chat connected and the readout appeared.
+ *
+ * So: every control is pinned, and the channel name is the only item allowed to
+ * shrink. It ellipsises instead of pushing a button out of reach.
+ */
+.chat-head > * { flex: none; }
+.chat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .chat-state {
-  margin-left: auto;
   display: inline-flex; align-items: center; gap: 5px;
   font-weight: 500; color: var(--text-faint);
+  white-space: nowrap;
 }
 .chat-state::before {
   content: ""; width: 6px; height: 6px; border-radius: 99px; background: var(--text-faint);
@@ -491,6 +510,7 @@ input { font: inherit; color: inherit; }
   font-weight: 400;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .chat-close {
@@ -545,13 +565,6 @@ input { font: inherit; color: inherit; }
   color: var(--accent);
   border-color: var(--accent-dim);
   background: var(--accent-wash);
-}
-.chat-7tv-data {
-  font-family: var(--mono);
-  font-weight: 400;
-  font-size: 10px;
-  opacity: 0.8;
-  font-variant-numeric: tabular-nums;
 }
 
 /*

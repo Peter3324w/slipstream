@@ -45,6 +45,15 @@ const LABEL: Record<ChatState, string> = {
 
 
 export function ChatPane(props: Props): React.JSX.Element {
+  const label = props.closed ? 'closed' : LABEL[props.state]
+  /*
+   * The normal path rides on the dot alone - connecting pulses amber, connected
+   * is a steady green - which buys back the 62px the word "connected" was taking
+   * out of a header that has no room to spare. Idle and offline keep their word:
+   * those are the two you might have to do something about.
+   */
+  const showState = props.closed || props.state === 'idle' || props.state === 'closed'
+
   return (
     <aside className="chat">
       <div className="chat-head">
@@ -59,13 +68,18 @@ export function ChatPane(props: Props): React.JSX.Element {
         {props.collapsed ? (
           <span
             className={`chat-state chat-state-dot is-${props.closed ? 'idle' : props.state}`}
-            title={`Chat ${props.closed ? 'closed' : LABEL[props.state]}`}
+            title={`Chat ${label}`}
           />
         ) : (
           <>
-            <span>{props.channel ? `#${props.channel}` : 'Chat'}</span>
+            <span className="chat-name" title={props.channel ? `#${props.channel}` : undefined}>
+              {props.channel ? `#${props.channel}` : 'Chat'}
+            </span>
 
-            {!props.closed && props.bytes > 0 && (
+            {/* Only while the socket is actually open: once chat drops, the word
+                "offline" is what matters, and it needs the room a stale total was
+                holding - the name was squeezing to "#su..." to pay for both. */}
+            {!props.closed && props.state === 'open' && props.bytes > 0 && (
               <span className="chat-data" title="Payload received since connecting">
                 {data(props.bytes)}
               </span>
@@ -91,8 +105,11 @@ export function ChatPane(props: Props): React.JSX.Element {
               onToggle={props.onToggleProvider}
             />
 
-            <span className={`chat-state is-${props.closed ? 'idle' : props.state}`}>
-              {props.closed ? 'closed' : LABEL[props.state]}
+            <span
+              className={`chat-state is-${props.closed ? 'idle' : props.state}`}
+              title={`Chat ${label}`}
+            >
+              {showState && label}
             </span>
 
             {!props.closed && (

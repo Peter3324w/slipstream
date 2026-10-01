@@ -55,8 +55,9 @@ export function EmoteMenu({ enabled, counts, bytes, onToggle }: Props): React.JS
             : 'Emotes off - names render as plain text and nothing is downloaded.'
         }
       >
+        {/* The byte count stays in the tooltip and the menu's foot - in the
+            header it cost 44px of a budget that had none to give. */}
         EMOTES
-        {anyOn && bytes > 0 && <span className="chat-7tv-data">{data(bytes)}</span>}
       </button>
 
       {open && (
