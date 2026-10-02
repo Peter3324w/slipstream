@@ -139,3 +139,19 @@ export const ChevronRight = ({ size = 14 }: P): React.JSX.Element => (
     <path d="M9.5 6l6 6-6 6" />
   </svg>
 )
+
+/* Two overlapping circles — iconsax's Colorfilter, which is the glyph PlayTime's
+   theme menu wears. Drawn here rather than pulling in the icon package for one
+   shape; the full swap is its own job. */
+export const Palette = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <circle cx="9.2" cy="9.2" r="5.4" />
+    <circle cx="14.8" cy="14.8" r="5.4" />
+  </svg>
+)
+
+export const Tick = ({ size = 13 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <path d="M5 12.5l4.4 4.4L19 7.4" />
+  </svg>
+)

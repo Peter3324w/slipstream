@@ -962,3 +962,53 @@ input { font: inherit; color: inherit; }
   font-size: inherit;
 }
 .linkish:hover { color: var(--text); }
+
+/* ---------------------------------------------------------- theme picker */
+
+.theme-wrap { position: relative; display: flex; }
+
+/* The popover hangs out of a 40px titlebar, so it needs its own stacking
+   context above the stage. Opaque rather than glass: glass over a moving video
+   frame is unreadable, and this is the one surface that floats over one. */
+.theme-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 164px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-md);
+  box-shadow: var(--glass-glow), 0 18px 44px rgba(0, 0, 0, 0.6);
+  -webkit-app-region: no-drag;
+}
+
+.theme-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.theme-opt:hover { background: rgb(var(--wash-rgb) / 0.07); color: var(--text); }
+.theme-opt.on { color: var(--text); }
+.theme-label { flex: 1; }
+
+/* The swatch is the theme's accent and nothing else — the ramp it moves is two
+   near-blacks, which at this size is a dark smudge either way. */
+.theme-chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.22);
+  flex: none;
+}

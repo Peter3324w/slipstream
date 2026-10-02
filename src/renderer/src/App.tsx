@@ -22,6 +22,7 @@ import { ChatBubble, ChatOff, Gauge, Rail, Star, StarOn } from './components/Ico
 import { Favourites } from './components/Favourites'
 import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
+import { ThemePicker } from './components/ThemePicker'
 
 type Phase =
   | { kind: 'idle' }
@@ -901,6 +902,7 @@ export default function App(): React.JSX.Element {
               <span style={{ fontSize: 11 }}>{signedIn ? auth?.user?.display : 'Sign in'}</span>
             </button>
           )}
+          <ThemePicker />
           <button
             className={`ctl ${hudVisible ? 'is-pinned' : ''}`}
             onClick={() => setHudVisible((v) => !v)}
