@@ -1020,3 +1020,96 @@ input { font: inherit; color: inherit; }
   box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.22);
   flex: none;
 }
+
+/* ---------------------------------------------------------- accent picker */
+
+.theme-sep { height: 1px; margin: 5px 2px; background: var(--stroke); }
+
+.accent { display: flex; flex-direction: column; gap: 7px; padding: 2px 6px 4px; }
+.accent-head { font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted); }
+.accent-sub { font-size: 11px; color: var(--muted); margin-right: 2px; }
+
+.accent-row { display: flex; align-items: center; gap: 6px; }
+
+.accent-auto {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 9px; border-radius: 99px;
+  border: 1px solid var(--stroke); background: var(--glass);
+  box-shadow: var(--glass-glow);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--muted);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.accent-auto:hover { color: var(--text-2); border-color: rgb(var(--wash-rgb) / 0.2); }
+.accent-auto.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.accent-auto svg { display: block; flex: none; }
+
+/* The swatch draws the DERIVED colour, not the raw pick: choosing a near-black
+   and being shown a near-black while the app lights up in a lifted version of it
+   is a small lie, and this row is where it would be noticed. */
+.accent-dot {
+  width: 18px; height: 18px; border-radius: 99px; flex: none;
+  box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.22);
+  transition: transform 0.12s var(--ease), box-shadow 0.12s;
+}
+.accent-dot:hover { transform: scale(1.12); }
+.accent-dot.on { box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.22), 0 0 0 2px var(--card), 0 0 0 3.5px var(--text); }
+
+.accent-custom {
+  display: flex; align-items: center; gap: 8px;
+  height: 28px; padding: 0 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--stroke); background: var(--glass);
+  box-shadow: var(--glass-glow);
+  font-size: 12px; color: var(--text-2);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.accent-custom:hover { background: var(--glass-strong); border-color: rgb(var(--wash-rgb) / 0.2); color: var(--text); }
+.accent-wheel {
+  width: 15px; height: 15px; border-radius: 99px; flex: none;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.25);
+}
+
+.accent-panel { display: flex; flex-direction: column; gap: 8px; width: 232px; }
+
+.accent-sv {
+  position: relative; height: 112px; border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.14);
+  cursor: crosshair; touch-action: none;
+}
+.accent-hue {
+  position: relative; height: 12px; border-radius: 99px;
+  background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+  box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.14);
+  cursor: ew-resize; touch-action: none;
+}
+.accent-knob {
+  position: absolute; width: 11px; height: 11px; border-radius: 99px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.accent-fields { display: flex; align-items: flex-end; gap: 5px; }
+.accent-preview {
+  width: 26px; height: 26px; border-radius: var(--r-sm); flex: none;
+  box-shadow: inset 0 0 0 1px rgb(var(--wash-rgb) / 0.22);
+}
+.accent-field {
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: var(--muted);
+}
+.accent-field-hex { flex: 1; }
+.accent-field input {
+  width: 100%; height: 24px; padding: 0 6px; min-width: 0;
+  border-radius: var(--r-sm); border: 1px solid var(--stroke);
+  background: var(--bg); color: var(--text);
+  font-size: 11px; font-weight: 400; letter-spacing: 0;
+}
+.accent-field input:focus { outline: none; border-color: var(--accent); }
+/* The spinners cost 16px each on a field sized for three digits. */
+.accent-field input::-webkit-outer-spin-button,
+.accent-field input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+.accent-actions { display: flex; justify-content: flex-end; gap: 6px; }

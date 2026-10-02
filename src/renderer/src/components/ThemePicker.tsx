@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Palette, Tick } from './Icons'
 import { applyTheme, currentTheme, THEMES } from '../lib/themes'
+import { AccentPicker } from './AccentPicker'
 
 /**
  * The titlebar's theme menu. It holds the open/closed state and the id it is
@@ -59,6 +60,8 @@ export function ThemePicker(): React.JSX.Element {
               {theme === t.id && <Tick />}
             </button>
           ))}
+          <div className="theme-sep" />
+          <AccentPicker onDone={() => setOpen(false)} />
         </div>
       )}
     </div>
