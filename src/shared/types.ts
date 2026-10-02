@@ -166,6 +166,11 @@ export interface VodSummary {
   views: number
   /** Subscriber-only: Twitch will not serve it to an anonymous viewer. */
   restricted: boolean
+  /**
+   * A highlight is an edit someone chose to keep, not the broadcast itself, and
+   * the list says which it is looking at rather than quietly mixing the two.
+   */
+  kind: 'archive' | 'highlight'
 }
 
 /** One row in the favourites list. */

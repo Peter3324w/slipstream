@@ -55,12 +55,58 @@ export async function lookupChannel(login: string): Promise<ChannelLookup> {
   }
 }
 
+interface VideoNode {
+  id?: string
+  title?: string
+  lengthSeconds?: number
+  createdAt?: string
+  viewCount?: number
+  self?: { isRestricted?: boolean } | null
+}
+
+interface VideoConnection {
+  edges?: { node?: VideoNode }[]
+}
+
+function toSummaries(conn: VideoConnection | null | undefined, kind: VodSummary['kind']): VodSummary[] {
+  const out: VodSummary[] = []
+  for (const edge of conn?.edges ?? []) {
+    const n = edge?.node
+    if (!n?.id) continue
+    const created = n.createdAt ? Date.parse(n.createdAt) : NaN
+    out.push({
+      id: n.id,
+      title: n.title ?? '',
+      length: n.lengthSeconds ?? 0,
+      createdAt: Number.isNaN(created) ? 0 : created,
+      views: n.viewCount ?? 0,
+      restricted: n.self?.isRestricted === true,
+      kind
+    })
+  }
+  return out
+}
+
 /**
- * A channel's recent broadcasts, newest first.
+ * A channel's recent broadcasts, newest first, with highlights behind them.
  *
- * ARCHIVE only: highlights and uploads are someone's edit, not the stream that
- * was missed. Raw query rather than a persisted hash, for the reason above the
- * favourites query - the hashes rotate, a field list does not.
+ * Archives are the list. A highlight is someone's edit rather than the stream
+ * that was missed, so it does not get to sit among them unlabelled — but
+ * ARCHIVE-only was wrong in the case that actually turns up: a channel that
+ * stopped saving broadcasts still publishes highlights, and the screen then
+ * offered a month-old archive while saying nothing about the clip from last
+ * week. Measured on `faide` (2026-10-02): newest archive 25 days old, newest
+ * highlight 11 days old, nothing restricted. The broadcasts were never stored —
+ * no client can fetch what Twitch was never given.
+ *
+ * The rule is a comparison rather than a number of days: a highlight is only
+ * offered when it is NEWER than the newest archive. A channel with fresh
+ * archives therefore shows none and stays uncluttered, a channel with no
+ * archives at all shows them all, and there is no threshold to tune.
+ *
+ * One request with two aliases rather than two round trips. Raw query rather
+ * than a persisted hash, for the reason above the favourites query - the hashes
+ * rotate, a field list does not.
  *
  * Never throws. "Not live" is already a disappointment; it does not need an
  * error on top of it, so a failed lookup is simply an empty list.
@@ -73,7 +119,10 @@ export async function channelVods(login: string, first = 8): Promise<VodSummary[
       body: JSON.stringify({
         query: `query Vods($login: String!, $first: Int!) {
   user(login: $login) {
-    videos(first: $first, sort: TIME, type: ARCHIVE) {
+    archive: videos(first: $first, sort: TIME, type: ARCHIVE) {
+      edges { node { id title lengthSeconds createdAt viewCount self { isRestricted } } }
+    }
+    highlight: videos(first: $first, sort: TIME, type: HIGHLIGHT) {
       edges { node { id title lengthSeconds createdAt viewCount self { isRestricted } } }
     }
   }
@@ -87,37 +136,21 @@ export async function channelVods(login: string, first = 8): Promise<VodSummary[
     const body = (await res.json()) as {
       data?: {
         user?: {
-          videos?: {
-            edges?: {
-              node?: {
-                id?: string
-                title?: string
-                lengthSeconds?: number
-                createdAt?: string
-                viewCount?: number
-                self?: { isRestricted?: boolean } | null
-              }
-            }[]
-          } | null
+          archive?: VideoConnection | null
+          highlight?: VideoConnection | null
         } | null
       }
     }
 
-    const out: VodSummary[] = []
-    for (const edge of body.data?.user?.videos?.edges ?? []) {
-      const n = edge?.node
-      if (!n?.id) continue
-      const created = n.createdAt ? Date.parse(n.createdAt) : NaN
-      out.push({
-        id: n.id,
-        title: n.title ?? '',
-        length: n.lengthSeconds ?? 0,
-        createdAt: Number.isNaN(created) ? 0 : created,
-        views: n.viewCount ?? 0,
-        restricted: n.self?.isRestricted === true
-      })
-    }
-    return out
+    const archives = toSummaries(body.data?.user?.archive, 'archive')
+    // 0 when there are no archives, so every highlight clears the bar — which is
+    // exactly the channel that needs them.
+    const newestArchive = archives.reduce((max, v) => Math.max(max, v.createdAt), 0)
+    const highlights = toSummaries(body.data?.user?.highlight, 'highlight').filter(
+      (v) => v.createdAt > newestArchive
+    )
+
+    return [...archives, ...highlights]
   } catch {
     return []
   }

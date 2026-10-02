@@ -57,29 +57,54 @@ export function VodList({ login, onPick }: Props): React.JSX.Element {
   if (!state.rows.length)
     return <p className="vods-note">No past broadcasts either - this channel keeps none.</p>
 
+  const archives = state.rows.filter((v) => v.kind === 'archive')
+  const highlights = state.rows.filter((v) => v.kind === 'highlight')
+
+  const rows = (list: VodSummary[]): React.JSX.Element => (
+    <div className="vods-list">
+      {list.map((v) => (
+        <button
+          key={v.id}
+          className="vod-row"
+          onClick={() => onPick(v.id)}
+          // Twitch will not serve these to an anonymous viewer, so offering the
+          // click and failing afterwards would be worse than saying so here.
+          disabled={v.restricted}
+          title={v.restricted ? `${v.title} - subscribers only` : v.title}
+        >
+          <span className="vod-title">{v.title || 'Untitled broadcast'}</span>
+          <span className="vod-meta">
+            <span className="vod-len">{length(v.length)}</span>
+            <span>{ago(v.createdAt)}</span>
+            {v.restricted && <span className="vod-sub">subs only</span>}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <div className="vods">
-      <p className="vods-head">Watch a past broadcast</p>
-      <div className="vods-list">
-        {state.rows.map((v) => (
-          <button
-            key={v.id}
-            className="vod-row"
-            onClick={() => onPick(v.id)}
-            // Twitch will not serve these to an anonymous viewer, so offering the
-            // click and failing afterwards would be worse than saying so here.
-            disabled={v.restricted}
-            title={v.restricted ? `${v.title} - subscribers only` : v.title}
-          >
-            <span className="vod-title">{v.title || 'Untitled broadcast'}</span>
-            <span className="vod-meta">
-              <span className="vod-len">{length(v.length)}</span>
-              <span>{ago(v.createdAt)}</span>
-              {v.restricted && <span className="vod-sub">subs only</span>}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Highlights lead only because main hands them over only when they are
+          newer than every archive, which makes this plain newest-first. They
+          keep their own heading rather than being mixed in: an edit should
+          never be mistaken for the broadcast it was cut from. */}
+      {highlights.length > 0 && (
+        <>
+          <p className="vods-head">
+            {archives.length > 0 ? 'Newer highlights' : 'Highlights'}
+          </p>
+          {rows(highlights)}
+        </>
+      )}
+      {archives.length > 0 && (
+        <>
+          <p className="vods-head">
+            {highlights.length > 0 ? 'Past broadcasts' : 'Watch a past broadcast'}
+          </p>
+          {rows(archives)}
+        </>
+      )}
     </div>
   )
 }
