@@ -32,7 +32,7 @@ function Resolving({ channel, onCancel }: { channel?: string; onCancel?: () => v
       <p>
         Asking streamlink about <strong>{channel}</strong>...
       </p>
-      <p style={{ color: 'var(--text-faint)', fontSize: 12 }}>
+      <p style={{ color: 'var(--muted)', fontSize: 12 }}>
         {elapsed > EXPECTED_SECONDS * 2
           ? `${elapsed}s - longer than the usual ${EXPECTED_SECONDS}s.`
           : `${elapsed}s`}

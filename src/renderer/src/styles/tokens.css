@@ -1,25 +1,93 @@
+/* ── Slipstream's tokens are PlayTime's tokens ─────────────────────────────
+   Same vocabulary, same rules, so "use our design system" means one thing in
+   both apps. Ported 2026-10-02 from PlayTime's 00-base.css.
+
+   What came across verbatim: the neutral ramp, the channel tokens that carry an
+   alpha, glass, green/danger and their meanings, and the four theme blocks.
+
+   What is Slipstream's own, and stays here: the accent is PURPLE rather than
+   PlayTime's white. PlayTime's accent is white because a selected pill is white
+   in all of its themes; Slipstream's selected thing has always been #9d7bff and
+   that is the one colour this app is recognised by. The system permits it — an
+   accent rides a ground, it does not belong to one — so purple is simply this
+   app's default accent and every theme below keeps its own.
+
+   Rule for adding a theme: only the values in a block, and nothing outside it.
+   If a theme needs a rule changed elsewhere, that rule is the bug — it is a
+   literal that should have been a token, and it will break the next theme too.
+
+   NOT ported: PlayTime's 1680/940 breakpoints. Those exist for a tracker with
+   side rails beside a bento. This is a video window and it should survive
+   smaller than a bento does. */
+
 :root {
-  --bg: #0b0b0f;
-  --surface: #141419;
-  --surface-2: #1c1c23;
-  --surface-3: #24242d;
-  --border: #26262f;
-  --border-soft: #1e1e26;
+  --bg: #000000;
+  --surface: #0c0c0c;
+  --card: #121212;
+  --card-2: #1a1a1a;
 
-  --text: #e8e8ed;
-  --text-dim: #9a9aa8;
-  --text-faint: #6b6b7a;
+  /* The two materials everything else is made of, as bare channels so they can
+     take an alpha. --wash-rgb is the app's chrome: every card fill, hover,
+     hairline and inset sheen is this colour at some alpha, which is what lets a
+     container join a theme instead of sitting on it as a grey box. --text-rgb
+     is the same idea for type dimmed by alpha rather than by --muted. */
+  --wash-rgb: 255 255 255;
+  --text-rgb: 255 255 255;
+  --stroke: rgb(var(--wash-rgb) / 0.1);
+  --stroke-soft: rgb(var(--wash-rgb) / 0.06);
 
+  /* --accent is the colour of a CHOSEN thing: a focused input, the active
+     favourite, the Watch button. --on-accent is what rides on that fill — and
+     it is a token rather than a literal #fff because the custom accent picker
+     flips it by WCAG luminance. A hardcoded white here ships white-on-white the
+     first time someone picks a pale accent. */
   --accent: #9d7bff;
-  --accent-dim: #7c5cf0;
-  --accent-wash: rgba(157, 123, 255, 0.12);
-  --live: #f0556a;
-  --good: #4ade80;
+  --accent-2: #9d7bff;
+  --accent-rgb: 157 123 255;
+  --on-accent: #ffffff;
+  --on-accent-soft: rgba(255, 255, 255, 0.6);
+  --on-accent-mute: #c9bcff;
+  --accent-hover: #b196ff;
 
+  /* What a chart or a meter draws in, kept separate from --accent because a bar
+     is not a button. Nothing uses it yet; it is here so the theme blocks below
+     stay identical to PlayTime's and the next graph has a colour waiting. */
+  --data: #9d7bff;
+  --data-rgb: 157 123 255;
+
+  --text: #ffffff;
+  --text-2: #f5f5f5;
+  --muted: #9a9a9a;
+
+  /* Green is the app's "alive" colour — the live dot on a favourite, a
+     connected state — not merely a trend arrow. It keeps that job in every
+     theme; what moves is which green, so it sits with the family around it. */
+  --green-rgb: 74 222 128;
+  --green: rgb(var(--green-rgb));
+  --on-green: #06140b;
+
+  --danger-rgb: 255 90 122;
+  --danger: rgb(var(--danger-rgb));
+  --on-danger: #ffffff;
+
+  /* Secondary controls are a pane of dark glass, not a grey wash. A white fill
+     at low alpha LIGHTENS a button, which is what makes a secondary control
+     read as a different species from everything near it. Black at 35% darkens
+     instead, and the inset sheen is what makes it read as glass over the page's
+     own black. Deliberately no backdrop-filter: blur over flat black buys
+     nothing and this rides on every secondary control in the app. */
+  --glass: rgba(0, 0, 0, 0.35);
+  --glass-strong: rgba(0, 0, 0, 0.55);
+  --glass-glow: inset 0 0 20px rgb(var(--wash-rgb) / 0.03), inset 0 1px 0 rgb(var(--wash-rgb) / 0.05);
+
+  /* PlayTime's --radius is its CARD radius, which is what this was already
+     calling --r-lg. Controls keep their own smaller steps: nine inputs, chips
+     and buttons at 8px would read as lozenges at 16. */
+  --radius: 16px;
   --r-sm: 8px;
   --r-md: 12px;
-  --r-lg: 16px;
 
+  /* ── Slipstream's own, with no PlayTime counterpart ───────────────────── */
   --titlebar-h: 40px;
   --chat-w: 340px;
   /* Width of a side panel folded to a strip. */
@@ -29,4 +97,134 @@
   --mono: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ── Themes ────────────────────────────────────────────────────────────────
+   A theme moves the neutral ramp and nothing else. Strokes, washes and glass
+   stay as they are, because they are white and black at low alpha: they re-tint
+   themselves over whatever floor is underneath.
+
+   --green and --danger do NOT move between themes without a reason written
+   down. Green means alive in all of them; making the one colour with a fixed
+   meaning the least predictable thing on screen would be backwards. Where a
+   block does move one, the comment says which collision forced it. */
+
+:root[data-theme='graphite'] {
+  /* Warm near-black. Same contrast as the default, but #000 on #fff is the most
+     clinical pair available and the warmth is most of what reads as chosen
+     rather than default. */
+  --bg: #0a0908;
+  --surface: #12100e;
+  --card: #171512;
+  --card-2: #201d19;
+  --text: #faf8f5;
+  --text-2: #efebe6;
+  --muted: #9a9289;
+  --wash-rgb: 255 238 220;
+  --text-rgb: 250 248 245;
+  --stroke: rgb(var(--wash-rgb) / 0.11);
+  --stroke-soft: rgb(var(--wash-rgb) / 0.065);
+  --accent: #e8b075;
+  --accent-2: #e8b075;
+  --accent-rgb: 232 176 117;
+  --on-accent: #1a1206;
+  --on-accent-soft: rgba(26, 18, 6, 0.6);
+  --on-accent-mute: #8f6538;
+  --accent-hover: #f2c491;
+  --data: #e8b075;
+  --data-rgb: 232 176 117;
+  /* A leaf green, hue pulled toward the amber it now shares a page with. */
+  --green-rgb: 142 203 106;
+  --on-green: #101806;
+}
+
+:root[data-theme='rose'] {
+  /* --danger is a rose (hue ~348) and a pink accent lands within twenty degrees
+     of it — so "stop" and "selected" would be the same colour, which is worse
+     than bland. The accent takes the magenta end at ~330 and --danger is pushed
+     to a true red at hue 0 here and only here. Red still means danger; it just
+     stops being the same pink as the thing you clicked. --green goes mint so
+     that alive doesn't fight the accent either. */
+  --bg: #0b0709;
+  --surface: #140d11;
+  --card: #1a1116;
+  --card-2: #241820;
+  --text: #f9f2f5;
+  --text-2: #ece0e6;
+  --muted: #9c8b93;
+  --wash-rgb: 255 225 240;
+  --text-rgb: 249 242 245;
+  --stroke: rgb(var(--wash-rgb) / 0.11);
+  --stroke-soft: rgb(var(--wash-rgb) / 0.065);
+  --accent: #f472b6;
+  --accent-2: #f472b6;
+  --accent-rgb: 244 114 182;
+  --on-accent: #1a0610;
+  --on-accent-soft: rgba(26, 6, 16, 0.6);
+  --on-accent-mute: #7a3559;
+  --accent-hover: #f894c9;
+  --data: #f472b6;
+  --data-rgb: 244 114 182;
+  --green-rgb: 63 217 168;
+  --on-green: #04140e;
+  --danger-rgb: 255 92 92;
+}
+
+:root[data-theme='moss'] {
+  /* A forest floor. The one theme where the accent and --green are the same
+     family, which is a problem the others don't have: green already means alive
+     here — the live dot on a favourite — and an accent on the same hue would
+     quietly take that meaning over. So they are pulled apart deliberately, a
+     lime-leaf at ~95 against a mint at ~166. Form does the rest: a chosen thing
+     is a filled pill, an alive thing is a dot. */
+  --bg: #060b07;
+  --surface: #0b120d;
+  --card: #101913;
+  --card-2: #182419;
+  --text: #f1f7f2;
+  --text-2: #e3ece5;
+  --muted: #8a9a8e;
+  --wash-rgb: 210 255 220;
+  --text-rgb: 241 247 242;
+  --stroke: rgb(var(--wash-rgb) / 0.11);
+  --stroke-soft: rgb(var(--wash-rgb) / 0.065);
+  --accent: #8ce563;
+  --accent-2: #8ce563;
+  --accent-rgb: 140 229 99;
+  --on-accent: #0a1405;
+  --on-accent-soft: rgba(10, 20, 5, 0.6);
+  --on-accent-mute: #476b30;
+  --accent-hover: #a3ed80;
+  --data: #8ce563;
+  --data-rgb: 140 229 99;
+  --green-rgb: 52 214 173;
+  --on-green: #04140f;
+}
+
+:root[data-theme='deep'] {
+  /* The same move, cool. */
+  --bg: #070a12;
+  --surface: #0c111c;
+  --card: #111726;
+  --card-2: #182033;
+  --text: #f2f5fb;
+  --text-2: #e4e9f5;
+  --muted: #8a93a8;
+  --wash-rgb: 190 210 255;
+  --text-rgb: 242 245 251;
+  --stroke: rgb(var(--wash-rgb) / 0.12);
+  --stroke-soft: rgb(var(--wash-rgb) / 0.07);
+  --accent: #7c9cff;
+  --accent-2: #7c9cff;
+  --accent-rgb: 124 156 255;
+  --on-accent: #050a1c;
+  --on-accent-soft: rgba(5, 10, 28, 0.62);
+  --on-accent-mute: #3f5288;
+  --accent-hover: #9bb3ff;
+  --data: #7c9cff;
+  --data-rgb: 124 156 255;
+  /* The same green pushed to the emerald end, so it sits with the periwinkle
+     instead of cutting across it. */
+  --green-rgb: 63 217 168;
+  --on-green: #04140e;
 }

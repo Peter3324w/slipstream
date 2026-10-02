@@ -49,7 +49,7 @@ export function MemoryHud(): React.JSX.Element {
           <div className="hud-row" key={s.pid}>
             <span>
               {LABELS[s.type] ?? s.type.toLowerCase()}{' '}
-              <span style={{ color: 'var(--text-faint)' }}>{s.pid}</span>
+              <span style={{ color: 'var(--muted)' }}>{s.pid}</span>
             </span>
             <span className="n">{mb(s.bytes)}</span>
           </div>
@@ -58,7 +58,7 @@ export function MemoryHud(): React.JSX.Element {
         <span>{samples.length} processes</span>
         <span className="n">{mb(total)}</span>
       </div>
-      <div className="hud-row" style={{ color: 'var(--text-faint)' }}>
+      <div className="hud-row" style={{ color: 'var(--muted)' }}>
         <span>target</span>
         <span className="n">{mb(TARGET_BYTES)}</span>
       </div>
