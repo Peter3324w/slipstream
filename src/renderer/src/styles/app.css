@@ -396,7 +396,7 @@ input { font: inherit; color: inherit; }
   content: ""; width: 6px; height: 6px; border-radius: 99px; background: var(--muted);
 }
 .chat-state.is-open::before { background: var(--green); }
-.chat-state.is-connecting::before { background: #eab308; animation: pulse 1.2s var(--ease) infinite; }
+.chat-state.is-connecting::before { background: var(--muted); animation: pulse 1.2s var(--ease) infinite; }
 
 .chat-log {
   flex: 1;
