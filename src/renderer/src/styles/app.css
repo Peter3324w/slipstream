@@ -642,9 +642,17 @@ input { font: inherit; color: inherit; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  /* The pill's label is uppercase here rather than in each caller's JSX, or the
+     next one is typed in whatever case its author reached for — which is how
+     "sync" ended up beside "EMOTES". Caps also stop a lowercase label reading as
+     a smaller one: at 10px the eye is comparing x-height against cap-height. */
+  text-transform: uppercase;
   color: var(--muted);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
+/* An inline SVG sits on the text baseline and carries its descender space with
+   it, so a glyph in a flex row centres on the wrong box and rides low. */
+.chat-7tv svg { display: block; flex: none; }
 .chat-7tv:hover { color: var(--text-2); }
 .chat-7tv.is-on {
   color: var(--accent);
