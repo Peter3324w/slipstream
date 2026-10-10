@@ -10,6 +10,7 @@ import type {
 import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseWatchInput, type WatchTarget } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
+import { useVideoZoom } from './player/zoom'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
 import { ChatSync } from './chat/sync'
@@ -129,6 +130,8 @@ function bridgeReady(): boolean {
 
 export default function App(): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const zoom = useVideoZoom(wrapRef, videoRef)
   const logRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
   const chatRef = useRef<TwitchChat | null>(null)
@@ -819,11 +822,14 @@ export default function App(): React.JSX.Element {
         case 'f2':
           setHudVisible((v) => !v)
           break
+        case '0':
+          zoom.reset()
+          break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [seek, togglePlay, toggleChat, stop])
+  }, [seek, togglePlay, toggleChat, stop, zoom.reset])
 
   // --------------------------------------------------------------- view
 
@@ -964,8 +970,14 @@ export default function App(): React.JSX.Element {
       />
 
       <main className="stage">
-        <div className="video-wrap">
+        <div className="video-wrap" ref={wrapRef}>
           <video ref={videoRef} playsInline />
+          {zoom.scale > 1 && (
+            <button className="zoom-badge" onClick={zoom.reset} title="Reset zoom  (0)">
+              {zoom.scale.toFixed(1)}x
+              <span>Reset</span>
+            </button>
+          )}
           {phase.kind === 'idle' && <Placeholder kind="idle" />}
           {phase.kind === 'resolving' && (
             <Placeholder kind="resolving" channel={phase.channel} onCancel={cancel} />
