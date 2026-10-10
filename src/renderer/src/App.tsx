@@ -732,6 +732,9 @@ export default function App(): React.JSX.Element {
    * where Window Controls Overlay is active - so the layout silently differs
    * between the app and a browser tab. Reading the rect directly works in both,
    * and geometrychange fires on maximise/restore, when the reserved width moves.
+   * It can fire before innerWidth has caught up with the new window size, which
+   * leaves an inset as wide as the difference; a resize always follows, so the
+   * inset is measured again there.
    */
   useEffect(() => {
     const wco = (navigator as Navigator & { windowControlsOverlay?: WindowControlsOverlay })
@@ -745,7 +748,11 @@ export default function App(): React.JSX.Element {
     }
     apply()
     wco.addEventListener('geometrychange', apply)
-    return () => wco.removeEventListener('geometrychange', apply)
+    window.addEventListener('resize', apply)
+    return () => {
+      wco.removeEventListener('geometrychange', apply)
+      window.removeEventListener('resize', apply)
+    }
   }, [])
 
   useEffect(() => {

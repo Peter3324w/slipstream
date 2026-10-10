@@ -102,14 +102,20 @@ input { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn-icon { width: 28px; padding: 0; display: grid; place-items: center; }
 
+/* min-width: 0 lets this give way to the buttons on its right, so it has to
+   clip as well: without overflow: hidden the badge and the name kept their
+   width and were painted straight over the star and the rail toggle. */
 .now-playing {
   display: flex;
   align-items: baseline;
   gap: 8px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
-.now-playing .who { font-weight: 600; }
+.now-playing .live-dot,
+.now-playing .vod-dot { flex: none; }
+.now-playing .who { font-weight: 600; white-space: nowrap; flex: none; }
 .now-playing .what {
   color: var(--muted);
   font-size: 12px;
