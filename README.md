@@ -338,6 +338,11 @@ a row, rather than looping.
   seekable**. `BACK_BUFFER_SECONDS` is not a ceiling here — the limitation at
   [Rewind / DVR](#rewind--dvr) does not apply to an archived channel
 - `#EXT-X-PROGRAM-DATE-TIME` is present on VODs too, so `playingDate()` keeps working unchanged
+- **Seek previews.** Twitch already draws a storyboard for each VOD: `seekPreviewsURL` on the
+  video points at an index of sprite sheets — 200 frames, so one every four minutes on a 13h
+  broadcast and far closer on a short one. Pointing at the bar shows the frame from around that
+  moment above the time. The sheets (four of ~150KB at the 220x124 size) are fetched on the first
+  touch of the bar, not on load, and through the same one-directory grant as the video
 - Muted ranges are visible in the playlist (54 of those 5048 segments, `-muted` in the name). Not
   surfaced yet; the DVR bar could mark them rather than letting you walk into silence
 

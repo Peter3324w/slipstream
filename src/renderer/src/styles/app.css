@@ -569,10 +569,30 @@ input { font: inherit; color: inherit; }
 .dvr-track.is-dragging .dvr-thumb { opacity: 1; }
 .dvr-track.is-dragging .dvr-thumb { transform: translate(-50%, 0) scale(1.15); }
 
-.dvr-bubble {
+/* Floats above the bar at the pointer: the frame from around then, when the
+   VOD has a storyboard, and the time under it. Opaque for the same reason the
+   theme popover is - it sits over a moving video frame. */
+.dvr-preview {
   position: absolute;
-  bottom: 20px;
+  bottom: 22px;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.dvr-frame {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--stroke);
+  background-color: var(--card);
+  background-repeat: no-repeat;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
+}
+
+.dvr-bubble {
   padding: 3px 7px;
   border-radius: 6px;
   background: var(--card);

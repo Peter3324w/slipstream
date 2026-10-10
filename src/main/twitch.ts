@@ -11,7 +11,7 @@
  * tab and the same one streamlink itself sends. It is not a credential, and nothing
  * here is authenticated: the query asks only whether a login resolves to a user.
  */
-import type { ChannelSummary, VodChatMessage, VodChatPage, VodSummary } from '@shared/types'
+import type { ChannelSummary, Storyboard, VodChatMessage, VodChatPage, VodSummary } from '@shared/types'
 
 const GQL = 'https://gql.twitch.tv/gql'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
@@ -308,6 +308,8 @@ export interface VodInfo {
   recordedAt: number | null
   /** Sub-only, or otherwise not ours to play. */
   restricted: boolean
+  /** Where the seek-preview index lives, when Twitch generated one. */
+  seekPreviews: string | null
 }
 
 /**
@@ -325,7 +327,7 @@ export async function vodInfo(id: string): Promise<VodInfo | null> {
       body: JSON.stringify({
         query: `query Vod($id: ID!) {
   video(id: $id) {
-    title lengthSeconds createdAt
+    title lengthSeconds createdAt seekPreviewsURL
     game { displayName }
     owner { login displayName }
     self { isRestricted }
@@ -343,6 +345,7 @@ export async function vodInfo(id: string): Promise<VodInfo | null> {
           title?: string
           lengthSeconds?: number
           createdAt?: string
+          seekPreviewsURL?: string | null
           game?: { displayName?: string } | null
           owner?: { login?: string; displayName?: string } | null
           self?: { isRestricted?: boolean } | null
@@ -360,7 +363,63 @@ export async function vodInfo(id: string): Promise<VodInfo | null> {
       category: v.game?.displayName ?? '',
       lengthSeconds: typeof v.lengthSeconds === 'number' ? v.lengthSeconds : null,
       recordedAt: Number.isNaN(recorded) ? null : recorded,
-      restricted: v.self?.isRestricted === true
+      restricted: v.self?.isRestricted === true,
+      seekPreviews: typeof v.seekPreviewsURL === 'string' && v.seekPreviewsURL ? v.seekPreviewsURL : null
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The seek-preview index for a VOD, read from the URL Twitch gives for it.
+ *
+ * The index lists the same frames at two sizes. Measured on a 13h VOD: "low" is
+ * 160x90 in one 341KB sheet, "high" is 220x124 over four sheets of ~150KB. High is
+ * the one used - the renderer loads sheets only once the bar is hovered, so the
+ * cost is paid by someone who is actually scrubbing.
+ *
+ * Fetched here rather than in the renderer because the CDN sends no CORS headers
+ * (vod-access.ts). The sheets themselves are plain images, which need none.
+ *
+ * Never throws. Previews are a nicety: null simply means the bar shows a time.
+ */
+export async function vodStoryboard(indexUrl: string): Promise<Storyboard | null> {
+  try {
+    const res = await fetch(indexUrl, { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) return null
+
+    const body = (await res.json()) as unknown
+    if (!Array.isArray(body)) return null
+    const entries = body as {
+      quality?: string
+      interval?: number
+      count?: number
+      width?: number
+      height?: number
+      cols?: number
+      rows?: number
+      images?: unknown
+    }[]
+    const pick = entries.find((e) => e?.quality === 'high') ?? entries[0]
+    if (!pick || !Array.isArray(pick.images)) return null
+
+    const numbers = [pick.interval, pick.count, pick.width, pick.height, pick.cols, pick.rows]
+    if (!numbers.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)) return null
+
+    const sheets = pick.images
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
+      .map((name) => new URL(name, indexUrl).href)
+    if (!sheets.length) return null
+
+    return {
+      interval: pick.interval as number,
+      count: pick.count as number,
+      width: pick.width as number,
+      height: pick.height as number,
+      cols: pick.cols as number,
+      rows: pick.rows as number,
+      sheets
     }
   } catch {
     return null

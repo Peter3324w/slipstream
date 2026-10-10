@@ -979,6 +979,7 @@ export default function App(): React.JSX.Element {
         <Controls
           ready={phase.kind === 'playing'}
           vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
+          storyboard={phase.kind === 'playing' ? phase.stream.video?.storyboard : null}
           playing={playing}
           onPlayPause={togglePlay}
           onStop={stop}

@@ -1,3 +1,4 @@
+import type { Storyboard } from '@shared/types'
 import { useEffect, useRef, useState } from 'react'
 import type { QualityLevel } from '@/player/hls'
 import { Layers, Pause, Play, Stop, Volume, VolumeOff } from './Icons'
@@ -16,6 +17,8 @@ interface Props {
   dvr: { start: number; end: number; current: number }
   /** A VOD scrubs against its length; live scrubs against the rewind buffer. */
   vod: boolean
+  /** Seek-preview frames for the VOD being played, if Twitch has them. */
+  storyboard?: Storyboard | null
   onSeekTo: (time: number) => void
   onJumpLive: () => void
   volume: number
@@ -88,6 +91,7 @@ export function Controls(props: Props): React.JSX.Element {
         current={props.dvr.current}
         disabled={!props.ready}
         vod={props.vod}
+        storyboard={props.storyboard}
         onSeek={props.onSeekTo}
         onJumpLive={props.onJumpLive}
       />

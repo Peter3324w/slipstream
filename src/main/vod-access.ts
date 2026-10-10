@@ -34,9 +34,11 @@ let allowed: string[] = []
  * beside their playlist as relative names (`0.mp4`), so the directory covers the
  * whole VOD and nothing else.
  */
-export function allowVod(masterPlaylist: string): void {
+export function allowVod(masterPlaylist: string, alsoBeside: string[] = []): void {
   const next = new Set<string>()
-  for (const line of masterPlaylist.split('\n')) {
+  // `alsoBeside` is for files the VOD needs that the master does not name - the
+  // seek-preview sheets, which live in a directory of their own.
+  for (const line of [...masterPlaylist.split('\n'), ...alsoBeside]) {
     const uri = line.trim()
     if (!uri.startsWith('https://')) continue
     try {
@@ -47,6 +49,16 @@ export function allowVod(masterPlaylist: string): void {
     }
   }
   allowed = [...next]
+}
+
+/** Whether a URL is on the CDN the renderer's CSP reaches. See csp.ts. */
+export function onVodCdn(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' && parsed.hostname.endsWith('.cloudfront.net')
+  } catch {
+    return false
+  }
 }
 
 /** Called when playback stops, so the grant does not outlive what needed it. */

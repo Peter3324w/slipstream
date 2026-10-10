@@ -2,10 +2,10 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, delimiter } from 'node:path'
 import { promisify } from 'node:util'
-import type { ResolveResult, ResolvedStream } from '@shared/types'
+import type { ResolveResult, ResolvedStream, Storyboard } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
-import { channelExistence, vodInfo, vodMaster } from './twitch'
-import { allowVod, clearVodAccess, vodOutsideCdn } from './vod-access'
+import { channelExistence, vodInfo, vodMaster, vodStoryboard } from './twitch'
+import { allowVod, clearVodAccess, onVodCdn, vodOutsideCdn } from './vod-access'
 
 const run = promisify(execFile)
 
@@ -152,7 +152,7 @@ async function fetchMaster(streams: Record<string, StreamlinkStream>): Promise<s
  */
 export async function resolveVod(id: string): Promise<ResolveResult> {
   // The quick way first; twitch.ts has the timings that made it the first way.
-  const [direct, info] = await Promise.all([vodMaster(id), vodInfo(id)])
+  const [direct, { info, storyboard }] = await Promise.all([vodMaster(id), vodDetails(id)])
 
   let master = direct
   let meta: NonNullable<StreamlinkJson['metadata']> = {}
@@ -178,7 +178,7 @@ export async function resolveVod(id: string): Promise<ResolveResult> {
     meta = parsed.metadata ?? {}
   }
 
-  allowVod(master)
+  allowVod(master, storyboard?.sheets)
 
   // Said here, because the alternative is a player that sits on a black frame.
   const stray = vodOutsideCdn()
@@ -198,7 +198,8 @@ export async function resolveVod(id: string): Promise<ResolveResult> {
       video: {
         id,
         durationSeconds: info?.lengthSeconds ?? null,
-        recordedAt: info?.recordedAt ?? null
+        recordedAt: info?.recordedAt ?? null,
+        storyboard
       },
       channel: {
         id: meta.id ?? id,
@@ -212,6 +213,20 @@ export async function resolveVod(id: string): Promise<ResolveResult> {
       resolvedAt: Date.now()
     }
   }
+}
+
+/**
+ * The metadata lookup, and the seek-preview index it points at. Chained rather
+ * than separate so the index rides inside the time the master is being fetched.
+ * Sheets anywhere but the VOD CDN are dropped: the renderer could not load them.
+ */
+async function vodDetails(id: string): Promise<{
+  info: Awaited<ReturnType<typeof vodInfo>>
+  storyboard: Storyboard | null
+}> {
+  const info = await vodInfo(id)
+  const found = info?.seekPreviews ? await vodStoryboard(info.seekPreviews) : null
+  return { info, storyboard: found && found.sheets.every(onVodCdn) ? found : null }
 }
 
 function classifyVod(message: string, restricted: boolean): ResolveResult & { ok: false } {

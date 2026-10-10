@@ -25,6 +25,8 @@ export interface ResolvedStream {
     durationSeconds: number | null
     /** Epoch ms of the original broadcast. */
     recordedAt: number | null
+    /** Frames for the seek preview, when Twitch made any. */
+    storyboard?: Storyboard | null
   }
   channel: ChannelMeta
   /**
@@ -39,6 +41,29 @@ export interface ResolvedStream {
   masterPlaylist: string
   /** Epoch ms. The signed URLs inside the manifest expire; we re-resolve on error. */
   resolvedAt: number
+}
+
+/**
+ * Twitch's own seek previews for a VOD: a fixed number of frames spread evenly
+ * across the broadcast, packed into a few sprite sheets.
+ *
+ * Frame `i` is the picture at `i * interval` seconds. It sits on sheet
+ * `floor(i / (cols * rows))`, at column `i % cols` and row `floor(i / cols) % rows`.
+ * The interval stretches with the VOD - a 13 hour broadcast gets one frame every
+ * four minutes - so this shows where you are going, not the exact frame.
+ */
+export interface Storyboard {
+  /** Seconds between frames. */
+  interval: number
+  /** How many frames exist in total; the last sheet is usually part empty. */
+  count: number
+  /** One frame, in pixels. */
+  width: number
+  height: number
+  cols: number
+  rows: number
+  /** Absolute URLs of the sheets, in order. */
+  sheets: string[]
 }
 
 export type ResolveFailure =

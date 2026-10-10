@@ -14,7 +14,8 @@
  *
  * - media/connect blob:  the master playlist is handed over as a Blob (see types.ts)
  * - *.ttvnw.net          playlists and live video segments
- * - *.cloudfront.net     VOD playlists and segments; the host differs per VOD
+ * - *.cloudfront.net     VOD playlists and segments; the host differs per VOD.
+ *                        In img-src as well, for the seek-preview sheets
  * - static-cdn.jtvnw.net first-party emote images
  * - irc-ws.chat          anonymous chat
  */
@@ -27,7 +28,7 @@ export function contentSecurityPolicy(): string {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app https://cdn.betterttv.net https://cdn.frankerfacez.com",
+    `img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app https://cdn.betterttv.net https://cdn.frankerfacez.com ${VOD_CDN}`,
     "media-src 'self' blob:",
     `connect-src 'self' blob: https://*.ttvnw.net ${VOD_CDN} wss://irc-ws.chat.twitch.tv`,
     "object-src 'none'",
