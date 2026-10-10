@@ -367,6 +367,66 @@ export async function vodInfo(id: string): Promise<VodInfo | null> {
   }
 }
 
+/**
+ * A VOD's master playlist, asked for directly: one token query, one playlist fetch.
+ *
+ * This is the same pair of requests streamlink makes, and streamlink remains the
+ * fallback. It exists because of what was measured on the VOD path: streamlink took
+ * 20-24s per VOD on a tethered line and on one run did not come back inside its
+ * timeout at all, while these two requests took about a second. Live channels still
+ * go through streamlink, where it answers in a few seconds.
+ *
+ * The playlist parameters are the ones streamlink sends, so the master is the same
+ * one either way. Never throws: null means "ask streamlink instead", which also
+ * covers a sub-only VOD, since streamlink's answer is what gets classified.
+ */
+export async function vodMaster(id: string): Promise<string | null> {
+  try {
+    const res = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query VodToken($id: ID!) {
+  videoPlaybackAccessToken(id: $id, params: { platform: "web", playerBackend: "mediaplayer", playerType: "site" }) {
+    value
+    signature
+  }
+}`,
+        variables: { id }
+      }),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return null
+
+    const body = (await res.json()) as {
+      data?: { videoPlaybackAccessToken?: { value?: string; signature?: string } | null }
+    }
+    const token = body.data?.videoPlaybackAccessToken
+    if (!token?.value || !token.signature) return null
+
+    const params = new URLSearchParams({
+      platform: 'web',
+      p: String(Math.floor(Math.random() * 999_999)),
+      allow_source: 'true',
+      allow_audio_only: 'true',
+      playlist_include_framerate: 'true',
+      multigroup_video: 'true',
+      supported_codecs: 'h264',
+      nauthsig: token.signature,
+      nauth: token.value
+    })
+    const master = await fetch(`https://usher.ttvnw.net/vod/v2/${id}.m3u8?${params}`, {
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (!master.ok) return null
+
+    const text = await master.text()
+    return text.startsWith('#EXTM3U') ? text : null
+  } catch {
+    return null
+  }
+}
+
 /** Convenience for callers that only care whether the channel exists. */
 export async function channelExistence(login: string): Promise<Existence> {
   return (await lookupChannel(login)).state

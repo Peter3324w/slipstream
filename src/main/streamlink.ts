@@ -4,7 +4,7 @@ import { join, delimiter } from 'node:path'
 import { promisify } from 'node:util'
 import type { ResolveResult, ResolvedStream } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
-import { channelExistence, vodInfo } from './twitch'
+import { channelExistence, vodInfo, vodMaster } from './twitch'
 import { allowVod, clearVodAccess, vodOutsideCdn } from './vod-access'
 
 const run = promisify(execFile)
@@ -12,8 +12,12 @@ const run = promisify(execFile)
 const IS_WIN = process.platform === 'win32'
 const EXE = IS_WIN ? 'streamlink.exe' : 'streamlink'
 
-/** Resolution can take a while on a cold DNS cache; it is not a hung process. */
-const RESOLVE_TIMEOUT_MS = 30_000
+/**
+ * Resolution can take a while on a cold DNS cache; it is not a hung process. A VOD
+ * measured 23s on a tethered line, which left 30s too little room. The renderer
+ * gives up at 60, so this stays under it.
+ */
+const RESOLVE_TIMEOUT_MS = 45_000
 
 let cachedBin: string | null | undefined
 
@@ -117,6 +121,9 @@ async function askStreamlink(bin: string, url: string): Promise<StreamlinkJson |
         /* fall through to the error */
       }
     }
+    // A kill by the timeout reads as a bare "Command failed: <path> --json <url>".
+    if ((err as { killed?: boolean }).killed)
+      return new Error(`streamlink did not answer within ${RESOLVE_TIMEOUT_MS / 1000} seconds. Check the connection and try again.`)
     return err as Error
   }
 }
@@ -144,25 +151,32 @@ async function fetchMaster(streams: Record<string, StreamlinkStream>): Promise<s
  * See vod-access.ts for the measurement behind that.
  */
 export async function resolveVod(id: string): Promise<ResolveResult> {
-  const bin = findStreamlink()
-  if (!bin)
-    return {
-      ok: false,
-      reason: 'streamlink_missing',
-      message: 'streamlink was not found. Install it with:  winget install --id Streamlink.Streamlink'
-    }
+  // The quick way first; twitch.ts has the timings that made it the first way.
+  const [direct, info] = await Promise.all([vodMaster(id), vodInfo(id)])
 
-  // Asked for in parallel: it is only metadata, and streamlink is the slow half.
-  const [parsed, info] = await Promise.all([
-    askStreamlink(bin, `https://www.twitch.tv/videos/${id}`),
-    vodInfo(id)
-  ])
+  let master = direct
+  let meta: NonNullable<StreamlinkJson['metadata']> = {}
 
-  if (parsed instanceof Error) return classifyVod(parsed.message, info?.restricted === true)
-  if (parsed.error) return classifyVod(parsed.error, info?.restricted === true)
+  if (master === null) {
+    if (info?.restricted) return classifyVod('', true)
 
-  const master = await fetchMaster(parsed.streams ?? {})
-  if (master instanceof Error) return { ok: false, reason: 'error', message: master.message }
+    const bin = findStreamlink()
+    if (!bin)
+      return {
+        ok: false,
+        reason: 'streamlink_missing',
+        message: 'streamlink was not found. Install it with:  winget install --id Streamlink.Streamlink'
+      }
+
+    const parsed = await askStreamlink(bin, `https://www.twitch.tv/videos/${id}`)
+    if (parsed instanceof Error) return classifyVod(parsed.message, false)
+    if (parsed.error) return classifyVod(parsed.error, false)
+
+    const fetched = await fetchMaster(parsed.streams ?? {})
+    if (fetched instanceof Error) return { ok: false, reason: 'error', message: fetched.message }
+    master = fetched
+    meta = parsed.metadata ?? {}
+  }
 
   allowVod(master)
 
@@ -177,7 +191,6 @@ export async function resolveVod(id: string): Promise<ResolveResult> {
     }
   }
 
-  const meta = parsed.metadata ?? {}
   return {
     ok: true,
     stream: {

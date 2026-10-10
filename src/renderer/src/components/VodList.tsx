@@ -55,7 +55,7 @@ export function VodList({ login, onPick }: Props): React.JSX.Element {
   if (state.kind === 'failed')
     return <p className="vods-note">Could not ask Twitch about past broadcasts.</p>
   if (!state.rows.length)
-    return <p className="vods-note">No past broadcasts either - this channel keeps none.</p>
+    return <p className="vods-note">No past broadcasts listed either.</p>
 
   const archives = state.rows.filter((v) => v.kind === 'archive')
   const highlights = state.rows.filter((v) => v.kind === 'highlight')

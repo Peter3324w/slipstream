@@ -263,8 +263,11 @@ export default function App(): React.JSX.Element {
 
     const set = await window.slipstream.fetchEmotes(login, wanted).catch(() => null)
     if (!set) return
-    // Both can change while a thousand emotes are being fetched.
-    if (loginRef.current !== login || emoteProvidersRef.current !== wanted) return
+    // Both can change while a thousand emotes are being fetched. A VOD has no
+    // live login, so its broadcaster is the one to compare against - checking
+    // loginRef alone threw away every table fetched for a replay.
+    const current = loginRef.current ?? vodLoginRef.current
+    if (current !== login || emoteProvidersRef.current !== wanted) return
 
     if (listRef.current) listRef.current.emotes = set.emotes
     if (set.errors.length) listRef.current?.system(`Emotes: ${set.errors.join('; ')}`)
@@ -288,7 +291,7 @@ export default function App(): React.JSX.Element {
       setEmoteProviders(next)
       localStorage.setItem(EMOTES_KEY, next.join(','))
 
-      const login = loginRef.current
+      const login = loginRef.current ?? vodLoginRef.current
       if (login) void loadEmotes(login)
       else if (listRef.current) listRef.current.emotes = null
     },
@@ -321,9 +324,20 @@ export default function App(): React.JSX.Element {
     targetRef.current = target
     vodRef.current = isVod
     loginRef.current = login
+    vodIdRef.current = null
+    vodLoginRef.current = null
     setChannel(login)
     setPhase({ kind: 'resolving', channel: isVod ? `that VOD` : target.login })
     setLevels([])
+
+    // Let go of what was playing before asking for the next thing. Otherwise it
+    // carries on under the spinner, and if the resolve fails - an offline
+    // favourite - it keeps downloading and sounding behind the error screen.
+    playerRef.current?.stop()
+    vodChatRef.current?.stop()
+    setActiveLevel(-1)
+    setPlaying(false)
+    setDvr({ start: 0, end: 0, current: 0 })
 
     let result: ResolveResult
     try {
@@ -516,8 +530,11 @@ export default function App(): React.JSX.Element {
     }
     if (targetRef.current !== target) return
     if (result.ok) {
+      // A live stream rejoins at the edge; a VOD has to come back where it was,
+      // not at 0:00 of a fourteen hour broadcast.
+      const resumeAt = target.kind === 'vod' ? (videoRef.current?.currentTime ?? 0) : undefined
       setPhase({ kind: 'playing', stream: result.stream })
-      playerRef.current?.load(result.stream.masterPlaylist)
+      playerRef.current?.load(result.stream.masterPlaylist, resumeAt)
     } else {
       setPhase({ kind: 'error', reason: result.reason, message: result.message })
     }
@@ -774,7 +791,8 @@ export default function App(): React.JSX.Element {
           seek(10)
           break
         case 'l':
-          playerRef.current?.seekToLive()
+          // A VOD has no live edge; this would jump to its last second.
+          if (!vodRef.current) playerRef.current?.seekToLive()
           break
         case 'm':
           setMuted((v) => !v)

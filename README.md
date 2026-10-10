@@ -282,9 +282,17 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 
 ## VODs
 
-A VOD resolves exactly like a live channel — `streamlink --json https://twitch.tv/videos/<id>`
-returns the metadata and a `master` on `usher.ttvnw.net/vod/v2/` — and then stops working one level
-down, for a reason worth writing down.
+A VOD *can* resolve exactly like a live channel — `streamlink --json https://twitch.tv/videos/<id>`
+returns the metadata and a `master` on `usher.ttvnw.net/vod/v2/` — but that is now the fallback, not
+the first thing tried. Measured on a tethered line, streamlink took **20-24s** per VOD (against ~7s
+for a live channel) and on one run did not answer inside its timeout at all, which the app could
+only report as a failed command. The same two requests streamlink makes — a playback token from
+GQL, then the master from usher — take **about 1.8s** asked for directly, so `vodMaster` in
+`src/main/twitch.ts` does that and `resolveVod` only reaches for streamlink when it comes back
+empty. Live channels are unchanged.
+
+Either way the master arrives, and then playback stops working one level down, for a reason worth
+writing down.
 
 ### Live and VOD do not have the same CORS story
 

@@ -66,7 +66,8 @@ export class Player {
     return Hls.isSupported()
   }
 
-  load(masterPlaylist: string): void {
+  /** `startAt` resumes a VOD where it was; left out, hls.js picks the start. */
+  load(masterPlaylist: string, startAt?: number): void {
     this.destroy()
     this.staleReported = false
     this.networkFailures = 0
@@ -78,7 +79,8 @@ export class Player {
       lowLatencyMode: false,
       // Start on the highest rendition rather than ramping up from 160p.
       startLevel: -1,
-      capLevelToPlayerSize: false
+      capLevelToPlayerSize: false,
+      ...(startAt && startAt > 0 ? { startPosition: startAt } : {})
     })
     this.hls = hls
 

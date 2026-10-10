@@ -140,6 +140,8 @@ export class TwitchChat {
   private bytes = 0
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private closedByUs = false
+  /** Bumped by every connect and disconnect, so a stale open() can tell. */
+  private session = 0
   private credentials: CredentialSource | null = null
   private identity: { login: string; display: string; color: string | null } | null = null
 
@@ -197,8 +199,12 @@ export class TwitchChat {
 
     // Fetched before the socket opens, because PASS has to be the first line
     // and the handshake handler cannot await.
+    const session = this.session
     const creds = this.credentials ? await this.credentials().catch(() => null) : null
-    if (this.closedByUs || !this.channel) return
+    // A second connect() while the token was being fetched has already opened its
+    // own socket; carrying on here would open another to the same room and every
+    // message would arrive twice.
+    if (session !== this.session || this.closedByUs || !this.channel) return
 
     const ws = new WebSocket(ENDPOINT)
     this.ws = ws
@@ -308,6 +314,7 @@ export class TwitchChat {
   }
 
   disconnect(): void {
+    this.session++
     this.closedByUs = true
     if (this.retryTimer) {
       clearTimeout(this.retryTimer)
