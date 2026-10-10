@@ -28,6 +28,14 @@ export interface PlayerEvents {
 export const BACK_BUFFER_SECONDS = 120
 
 /**
+ * Fatal network errors in a row before the player says so instead of trying again.
+ * hls.js has already retried each request by the time one is fatal, so this is not
+ * the patience for a bad connection - it is the line between that and a request
+ * that will never succeed, which used to look like a VOD loading forever.
+ */
+const MAX_NETWORK_FAILURES = 3
+
+/**
  * Twitch names its renditions on the EXT-X-MEDIA lines, not on EXT-X-STREAM-INF,
  * so hls.js does not surface them. Join them back via the VIDEO group id, which
  * appears on both. Falls back to height when a channel serves something unusual.
@@ -47,6 +55,7 @@ export class Player {
   private hls: Hls | null = null
   private objectUrl: string | null = null
   private staleReported = false
+  private networkFailures = 0
 
   constructor(
     private readonly video: HTMLVideoElement,
@@ -60,6 +69,7 @@ export class Player {
   load(masterPlaylist: string): void {
     this.destroy()
     this.staleReported = false
+    this.networkFailures = 0
 
     const hls = new Hls({
       enableWorker: true,
@@ -90,6 +100,10 @@ export class Player {
 
     hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => this.events.onLevelSwitch(data.level))
 
+    hls.on(Hls.Events.FRAG_LOADED, () => {
+      this.networkFailures = 0
+    })
+
     hls.on(Hls.Events.ERROR, (_e, data) => {
       // 403/404 on a playlist means the signed token aged out. streamlink has to
       // do the token dance again; hls.js cannot recover from this on its own.
@@ -103,7 +117,12 @@ export class Player {
 
       switch (data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
-          hls.startLoad()
+          if (++this.networkFailures < MAX_NETWORK_FAILURES) {
+            hls.startLoad()
+            break
+          }
+          this.events.onError(`Could not reach the video (${data.details}). Check the connection and try again.`)
+          this.destroy()
           break
         case Hls.ErrorTypes.MEDIA_ERROR:
           hls.recoverMediaError()

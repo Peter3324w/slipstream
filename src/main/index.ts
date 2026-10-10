@@ -15,8 +15,8 @@ import type {
 import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseChannelInput, parseWatchInput } from '@shared/channel'
 import { resolveChannel, resolveVod, streamlinkVersion } from './streamlink'
-import { clearVodAccess, vodConnectSources, vodRequestAllowed } from './vod-access'
-import { contentSecurityPolicy } from './csp'
+import { clearVodAccess, vodRequestAllowed } from './vod-access'
+import { contentSecurityPolicy, VOD_CDN } from './csp'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
 import { channelSummaries, channelVods, vodComments } from './twitch'
 import { addFavourite, listFavourites, removeFavourite, setFavouritesDir } from './favourites'
@@ -138,11 +138,21 @@ function applyResponseHeaders(): void {
       headers['Access-Control-Allow-Origin'] = ['*']
     }
 
-    // A VOD's own host is added only while one is loaded, and only that one.
-    if (!isDev) headers['Content-Security-Policy'] = [contentSecurityPolicy(vodConnectSources())]
+    if (!isDev) headers['Content-Security-Policy'] = [contentSecurityPolicy()]
 
     callback({ responseHeaders: headers })
   })
+}
+
+/**
+ * The CSP has to name the whole VOD CDN (csp.ts says why), so this is what keeps
+ * the renderer to the one directory it was given: any other request to that CDN
+ * is cancelled before it leaves.
+ */
+function guardVodCdn(): void {
+  session.defaultSession.webRequest.onBeforeRequest({ urls: [`${VOD_CDN}/*`] }, (details, callback) =>
+    callback({ cancel: !vodRequestAllowed(details.url) })
+  )
 }
 
 function registerAuthIpc(): void {
@@ -287,6 +297,7 @@ if (!app.requestSingleInstanceLock()) {
     await restoreSession()
 
     applyResponseHeaders()
+    guardVodCdn()
     registerIpc()
     registerAuthIpc()
     createWindow()

@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 import type { ResolveResult, ResolvedStream } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { channelExistence, vodInfo } from './twitch'
-import { allowVod } from './vod-access'
+import { allowVod, clearVodAccess, vodOutsideCdn } from './vod-access'
 
 const run = promisify(execFile)
 
@@ -165,6 +165,17 @@ export async function resolveVod(id: string): Promise<ResolveResult> {
   if (master instanceof Error) return { ok: false, reason: 'error', message: master.message }
 
   allowVod(master)
+
+  // Said here, because the alternative is a player that sits on a black frame.
+  const stray = vodOutsideCdn()
+  if (stray) {
+    clearVodAccess()
+    return {
+      ok: false,
+      reason: 'error',
+      message: `Twitch is serving that VOD from ${stray}, which Slipstream does not know how to reach yet.`
+    }
+  }
 
   const meta = parsed.metadata ?? {}
   return {

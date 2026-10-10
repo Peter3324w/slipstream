@@ -58,15 +58,14 @@ export function vodRequestAllowed(url: string): boolean {
   return allowed.some((prefix) => url.startsWith(prefix))
 }
 
-/** Origins to add to the CSP's connect-src while a VOD is loaded. */
-export function vodConnectSources(): string[] {
-  const origins = new Set<string>()
+/**
+ * True when the master points somewhere the renderer's CSP does not reach, which
+ * would otherwise show up as a player that never starts. See csp.ts.
+ */
+export function vodOutsideCdn(): string | null {
   for (const prefix of allowed) {
-    try {
-      origins.add(new URL(prefix).origin)
-    } catch {
-      /* unreachable: these came from a URL */
-    }
+    const host = new URL(prefix).hostname
+    if (!host.endsWith('.cloudfront.net')) return host
   }
-  return [...origins]
+  return null
 }

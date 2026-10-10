@@ -307,10 +307,17 @@ The alternatives were relaying every segment through main over IPC, or a custom 
 same — both put megabytes a second of copying on the hot path of the one app whose whole claim is
 not doing that. So the response gets the header it is missing, for **exactly the directory the VOD
 being watched lives in**: the master names its media playlists absolutely, every segment sits beside
-one of them, and the grant is revoked the moment another channel or VOD is resolved. The packaged
-build's CSP adds that one origin to `connect-src` the same way, and drops it again. See
+one of them, and the grant is revoked the moment another channel or VOD is resolved. See
 `src/main/vod-access.ts`; the scoping is unit-tested, including a `cloudfront.net.evil.com` prefix
 spoof.
+
+The packaged build's CSP was first written to add that one origin to `connect-src` the same way and
+drop it again. That cannot work, and it shipped broken: a document's policy is the one that arrived
+with the document, so a header rebuilt on later responses never reached the page, every VOD request
+was refused, and hls.js retried without a word. Now the CSP names `https://*.cloudfront.net` as a
+constant, and the narrowing to one directory happens in a request guard in main, which cancels any
+other request to that CDN. The player also gives up and says so after three fatal network errors in
+a row, rather than looping.
 
 > Note for anyone reading this as a security claim: a `file://` page — which is what the packaged
 > build loads — turned out not to have CORS enforced against it at all, so in a build the grant is
