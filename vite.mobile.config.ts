@@ -21,8 +21,8 @@ export default defineConfig({
       'node:path': resolve('src/mobile/shims/path.ts')
     }
   },
-  // dev:mobile - the dev APK (scripts/apk-dev.mjs) loads this over the LAN.
-  server: { host: true, port: 5174, strictPort: true },
+  // ionic:serve - the Ionic extension's live reload loads this over the LAN.
+  server: { host: true },
   build: { outDir: resolve('out/mobile'), emptyOutDir: true, minify: 'esbuild', sourcemap: false },
   plugins: [react()]
 })

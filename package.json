@@ -12,10 +12,10 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "npm run build && electron-builder --win --config electron-builder.yml",
-    "build:mobile": "tsc --noEmit -p tsconfig.mobile.json && vite build -c vite.mobile.config.ts && cap sync android",
+    "build:mobile": "npm run ionic:build && cap sync android",
     "apk": "npm run build:mobile && cd android && gradlew.bat assembleDebug",
-    "dev:mobile": "vite -c vite.mobile.config.ts",
-    "apk:dev": "node scripts/apk-dev.mjs"
+    "ionic:serve": "vite -c vite.mobile.config.ts",
+    "ionic:build": "tsc --noEmit -p tsconfig.mobile.json && vite build -c vite.mobile.config.ts"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.6.9",

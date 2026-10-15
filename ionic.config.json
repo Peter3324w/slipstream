@@ -1,0 +1,7 @@
+{
+  "name": "Slipstream",
+  "type": "custom",
+  "integrations": {
+    "capacitor": {}
+  }
+}
