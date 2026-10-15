@@ -4,7 +4,7 @@ import { join, delimiter } from 'node:path'
 import { promisify } from 'node:util'
 import type { ResolveResult, ResolvedStream, Storyboard } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
-import { channelExistence, vodInfo, vodMaster, vodStoryboard } from './twitch'
+import { channelExistence, liveMaster, vodInfo, vodMaster, vodStoryboard } from './twitch'
 import { allowVod, clearVodAccess, onVodCdn, vodOutsideCdn } from './vod-access'
 
 const run = promisify(execFile)
@@ -247,13 +247,26 @@ function classifyVod(message: string, restricted: boolean): ResolveResult & { ok
 }
 
 /**
- * Ask streamlink for everything it knows about a channel, then fetch the master
- * playlist body here in main (see the note on ResolvedStream.masterPlaylist).
+ * Ask Twitch directly first, then streamlink for everything it knows about a
+ * channel; either way the master playlist body is fetched here in main (see the
+ * note on ResolvedStream.masterPlaylist).
  */
 export async function resolveChannel(input: string): Promise<ResolveResult> {
   const login = parseChannelInput(input)
   if (!login)
     return { ok: false, reason: 'invalid_channel', message: 'That does not look like a channel name.' }
+
+  // The quick way first; twitch.ts has the timings that made it the first way.
+  const direct = await liveMaster(login)
+  if (direct?.state === 'missing')
+    return { ok: false, reason: 'not_found', message: `There is no channel called "${login}".` }
+  if (direct?.state === 'offline')
+    return { ok: false, reason: 'offline', message: `${login} is not live right now.` }
+  if (direct?.state === 'live')
+    return {
+      ok: true,
+      stream: { kind: 'live', channel: direct.meta, masterPlaylist: direct.master, resolvedAt: Date.now() }
+    }
 
   const bin = findStreamlink()
   if (!bin)

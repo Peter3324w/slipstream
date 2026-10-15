@@ -15,8 +15,8 @@ interface Props {
   onPickVod?: (id: string) => void
 }
 
-/** Measured: streamlink takes roughly 8s on a live channel from a warm cache. */
-const EXPECTED_SECONDS = 8
+/** Measured: the direct ask takes 1-4s on a live channel; the streamlink fallback about 8s. */
+const EXPECTED_SECONDS = 4
 
 function Resolving({ channel, onCancel }: { channel?: string; onCancel?: () => void }): React.JSX.Element {
   const [elapsed, setElapsed] = useState(0)
@@ -30,7 +30,7 @@ function Resolving({ channel, onCancel }: { channel?: string; onCancel?: () => v
     <div className="placeholder">
       <div className="spinner" />
       <p>
-        Asking streamlink about <strong>{channel}</strong>...
+        Asking Twitch for <strong>{channel}</strong>...
       </p>
       <p style={{ color: 'var(--muted)', fontSize: 12 }}>
         {elapsed > EXPECTED_SECONDS * 2
@@ -89,7 +89,7 @@ export function Placeholder(props: Props): React.JSX.Element {
       </div>
       <h2>Pick a channel</h2>
       <p>
-        Type a name or paste a twitch.tv link up top. streamlink resolves the stream, hls.js
+        Type a name or paste a twitch.tv link up top. Slipstream asks Twitch for the stream, hls.js
         plays it, and chat joins anonymously &mdash; no account, no ads before the stream.
       </p>
     </div>

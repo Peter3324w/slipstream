@@ -87,8 +87,9 @@ function writeFlag(key: string, on: boolean): void {
 }
 
 /**
- * Main's own caps add up to about 53s (30s streamlink + 15s manifest + 8s liveness),
- * so this only fires when main is genuinely stuck rather than merely slow. It exists
+ * Main asks Twitch directly first (8s token + 10s playlist caps) and only falls back
+ * to streamlink (45s) when that fails, so this only fires when main is genuinely
+ * stuck rather than merely slow. It exists
  * because the alternative failure mode is a spinner that never resolves, which is
  * exactly how a broken preload bridge presented: silent, and indistinguishable from
  * a slow network.
@@ -319,7 +320,7 @@ export default function App(): React.JSX.Element {
         kind: 'error',
         reason: 'error',
         message:
-          'The preload bridge did not load, so nothing can reach streamlink. That is a build problem, not a network one.'
+          'The preload bridge did not load, so nothing can reach Twitch. That is a build problem, not a network one.'
       })
       return
     }
@@ -347,7 +348,7 @@ export default function App(): React.JSX.Element {
       result = await withTimeout(
         window.slipstream.resolve(raw),
         RESOLVE_TIMEOUT_MS,
-        'streamlink did not answer within 60 seconds.'
+        'Twitch did not answer within 60 seconds.'
       )
     } catch (err) {
       if (targetRef.current !== target) return
@@ -526,7 +527,7 @@ export default function App(): React.JSX.Element {
       result = await withTimeout(
         window.slipstream.resolve(target.kind === 'vod' ? `videos/${target.id}` : target.login),
         RESOLVE_TIMEOUT_MS,
-        'streamlink did not answer within 60 seconds.'
+        'Twitch did not answer within 60 seconds.'
       )
     } catch {
       return // the stream is still playing; a failed refresh is not worth a teardown

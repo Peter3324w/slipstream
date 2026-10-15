@@ -107,7 +107,7 @@ export class Player {
     })
 
     hls.on(Hls.Events.ERROR, (_e, data) => {
-      // 403/404 on a playlist means the signed token aged out. streamlink has to
+      // 403/404 on a playlist means the signed token aged out. main has to
       // do the token dance again; hls.js cannot recover from this on its own.
       const status = data.response?.code
       if ((status === 403 || status === 404) && !this.staleReported) {

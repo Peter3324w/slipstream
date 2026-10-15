@@ -11,7 +11,7 @@
  * tab and the same one streamlink itself sends. It is not a credential, and nothing
  * here is authenticated: the query asks only whether a login resolves to a user.
  */
-import type { ChannelSummary, Storyboard, VodChatMessage, VodChatPage, VodSummary } from '@shared/types'
+import type { ChannelMeta, ChannelSummary, Storyboard, VodChatMessage, VodChatPage, VodSummary } from '@shared/types'
 
 const GQL = 'https://gql.twitch.tv/gql'
 const WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
@@ -432,8 +432,8 @@ export async function vodStoryboard(indexUrl: string): Promise<Storyboard | null
  * This is the same pair of requests streamlink makes, and streamlink remains the
  * fallback. It exists because of what was measured on the VOD path: streamlink took
  * 20-24s per VOD on a tethered line and on one run did not come back inside its
- * timeout at all, while these two requests took about a second. Live channels still
- * go through streamlink, where it answers in a few seconds.
+ * timeout at all, while these two requests took about a second. Live channels take
+ * the same route now; see liveMaster.
  *
  * The playlist parameters are the ones streamlink sends, so the master is the same
  * one either way. Never throws: null means "ask streamlink instead", which also
@@ -463,17 +463,7 @@ export async function vodMaster(id: string): Promise<string | null> {
     const token = body.data?.videoPlaybackAccessToken
     if (!token?.value || !token.signature) return null
 
-    const params = new URLSearchParams({
-      platform: 'web',
-      p: String(Math.floor(Math.random() * 999_999)),
-      allow_source: 'true',
-      allow_audio_only: 'true',
-      playlist_include_framerate: 'true',
-      multigroup_video: 'true',
-      supported_codecs: 'h264',
-      nauthsig: token.signature,
-      nauth: token.value
-    })
+    const params = usherParams({ nauthsig: token.signature, nauth: token.value })
     const master = await fetch(`https://usher.ttvnw.net/vod/v2/${id}.m3u8?${params}`, {
       signal: AbortSignal.timeout(10_000)
     })
@@ -481,6 +471,105 @@ export async function vodMaster(id: string): Promise<string | null> {
 
     const text = await master.text()
     return text.startsWith('#EXTM3U') ? text : null
+  } catch {
+    return null
+  }
+}
+
+/** The playlist parameters streamlink sends to usher, plus the signed token. */
+function usherParams(token: Record<string, string>): URLSearchParams {
+  return new URLSearchParams({
+    platform: 'web',
+    p: String(Math.floor(Math.random() * 999_999)),
+    allow_source: 'true',
+    allow_audio_only: 'true',
+    playlist_include_framerate: 'true',
+    multigroup_video: 'true',
+    supported_codecs: 'h264',
+    ...token
+  })
+}
+
+export type LiveLookup =
+  | { state: 'live'; master: string; meta: ChannelMeta }
+  | { state: 'offline' | 'missing' }
+
+/**
+ * A live channel's master playlist, asked for directly, with its metadata in the
+ * same query. Measured against live Twitch: 0.9-3.6s, where streamlink took about
+ * 8s. It is also the only route that exists without Python, which is what the
+ * Android build needs.
+ *
+ * The token params are streamlink's own (playerType "embed", platform "site"), not
+ * the VOD path's "site"/"web": the embed token is the one that has been dodging the
+ * pre-roll, so it is copied rather than guessed. The usher path and fast_bread match
+ * what streamlink 8 sends as well.
+ *
+ * One query also settles what streamlink cannot: a null user is a channel that does
+ * not exist, a null stream is one that is offline, so no second lookup is needed.
+ *
+ * Never throws: null means "ask streamlink instead" - a failed request, or a channel
+ * that is live but whose playlist usher refused, which streamlink then classifies.
+ */
+export async function liveMaster(login: string): Promise<LiveLookup | null> {
+  try {
+    const res = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query LiveToken($login: String!) {
+  streamPlaybackAccessToken(channelName: $login, params: { platform: "site", playerBackend: "mediaplayer", playerType: "embed" }) {
+    value
+    signature
+  }
+  user(login: $login) {
+    displayName
+    stream { id game { displayName } }
+    broadcastSettings { title }
+  }
+}`,
+        variables: { login }
+      }),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return null
+
+    const body = (await res.json()) as {
+      data?: {
+        streamPlaybackAccessToken?: { value?: string; signature?: string } | null
+        user?: {
+          displayName?: string
+          stream?: { id?: string; game?: { displayName?: string } | null } | null
+          broadcastSettings?: { title?: string } | null
+        } | null
+      }
+    }
+    if (!body.data) return null
+    const { user, streamPlaybackAccessToken: token } = body.data
+    if (user === null) return { state: 'missing' }
+    if (!user) return null
+    if (user.stream === null) return { state: 'offline' }
+    if (!user.stream || !token?.value || !token.signature) return null
+
+    const params = usherParams({ sig: token.signature, token: token.value, fast_bread: 'true' })
+    const master = await fetch(`https://usher.ttvnw.net/api/v2/channel/hls/${login}.m3u8?${params}`, {
+      signal: AbortSignal.timeout(10_000)
+    })
+    if (!master.ok) return null
+
+    const text = await master.text()
+    if (!text.startsWith('#EXTM3U')) return null
+    return {
+      state: 'live',
+      master: text,
+      meta: {
+        id: user.stream.id ?? '',
+        login,
+        author: user.displayName || login,
+        title: user.broadcastSettings?.title ?? '',
+        category: user.stream.game?.displayName ?? ''
+      }
+    }
   } catch {
     return null
   }
