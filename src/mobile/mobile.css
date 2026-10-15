@@ -1,0 +1,42 @@
+/*
+ * Phone layout. Loaded only by the mobile entry, so the desktop never sees it.
+ * The desktop grid is three columns across one row; a phone in portrait has the
+ * width for one, so the same areas stack instead.
+ */
+
+/* No window to drag, and nothing for the drag regions to do. */
+.titlebar, .titlebar > *, .wordmark { -webkit-app-region: none; }
+
+@media (orientation: portrait) {
+  .app {
+    grid-template-rows: auto auto 1fr;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "titlebar titlebar"
+      "stage stage"
+      "rail chat";
+  }
+
+  .titlebar { flex-wrap: wrap; height: auto; row-gap: 6px; padding: 8px 12px; }
+  .channel-form { flex: 1; min-width: 0; }
+  .channel-input { flex: 1; width: auto; min-width: 0; }
+  .now-playing { order: 10; flex-basis: 100%; }
+
+  .stage { aspect-ratio: 16 / 9; width: 100%; }
+
+  /* The favourites strip sits beside chat, so collapsed is the better default
+     than 212px; expanding it still works, chat just narrows. */
+  .app .chat { width: auto; border-left: 1px solid var(--stroke-soft); }
+  .app.rail-hidden .chat { border-left: 0; }
+}
+
+/* A phone on its side: the video is the point. Chat stays, narrow and hideable. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .app {
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "stage chat";
+  }
+  .titlebar, .rail { display: none; }
+  .app .chat { width: min(32vw, 300px); }
+}

@@ -212,7 +212,7 @@ export async function vodComments(videoId: string, offsetSeconds: number): Promi
     // Read as text first: the payload size is the number worth reporting, and
     // content-length is absent on a chunked response.
     const raw = await res.text()
-    const bytes = Buffer.byteLength(raw)
+    const bytes = new TextEncoder().encode(raw).length
     const body = JSON.parse(raw) as {
       data?: {
         video?: {

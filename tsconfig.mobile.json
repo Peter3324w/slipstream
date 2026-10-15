@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "composite": false,
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@/*": ["./src/renderer/src/*"],
+      "node:fs/promises": ["./src/mobile/shims/fs.ts"],
+      "node:path": ["./src/mobile/shims/path.ts"]
+    }
+  },
+  "include": ["src/mobile/**/*", "src/renderer/src/**/*", "src/preload/index.d.ts", "src/shared/**/*"]
+}

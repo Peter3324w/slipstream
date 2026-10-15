@@ -11,9 +11,12 @@
     "build": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "dist": "npm run build && electron-builder --win --config electron-builder.yml"
+    "dist": "npm run build && electron-builder --win --config electron-builder.yml",
+    "build:mobile": "tsc --noEmit -p tsconfig.mobile.json && vite build -c vite.mobile.config.ts && cap sync android",
+    "apk": "npm run build:mobile && cd android && gradlew.bat assembleDebug"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
@@ -24,6 +27,8 @@
     "vite": "^7.3.6"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "hls.js": "^1.7.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

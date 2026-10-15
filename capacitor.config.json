@@ -1,0 +1,8 @@
+{
+  "appId": "dev.slipstream.app",
+  "appName": "Slipstream",
+  "webDir": "out/mobile",
+  "android": {
+    "allowMixedContent": false
+  }
+}
