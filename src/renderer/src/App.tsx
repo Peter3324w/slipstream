@@ -24,6 +24,7 @@ import { Favourites } from './components/Favourites'
 import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
 import { ThemePicker } from './components/ThemePicker'
+import { WindowControls } from './components/WindowControls'
 
 type Phase =
   | { kind: 'idle' }
@@ -729,38 +730,6 @@ export default function App(): React.JSX.Element {
     return () => clearInterval(id)
   }, [chatClosed])
 
-  /**
-   * Keep titlebar content clear of the native minimise/maximise/close buttons.
-   *
-   * The CSS env(titlebar-area-*) variables would do this, but they only exist
-   * where Window Controls Overlay is active - so the layout silently differs
-   * between the app and a browser tab. Reading the rect directly works in both,
-   * and geometrychange fires on maximise/restore, when the reserved width moves.
-   * It can fire before innerWidth has caught up with the new window size, which
-   * leaves an inset as wide as the difference; a resize always follows, so the
-   * inset is measured again there.
-   */
-  useEffect(() => {
-    const wco = (navigator as Navigator & { windowControlsOverlay?: WindowControlsOverlay })
-      .windowControlsOverlay
-    if (!wco) return
-
-    const apply = (): void => {
-      const rect = wco.getTitlebarAreaRect()
-      // An inactive overlay reports an empty rect, not a full-window titlebar.
-      // Reserving innerWidth in that case would squeeze the floating bar away.
-      const inset = rect.width > 0 ? Math.max(0, window.innerWidth - (rect.x + rect.width)) : 0
-      document.documentElement.style.setProperty('--titlebar-inset-right', `${inset + 8}px`)
-    }
-    apply()
-    wco.addEventListener('geometrychange', apply)
-    window.addEventListener('resize', apply)
-    return () => {
-      wco.removeEventListener('geometrychange', apply)
-      window.removeEventListener('resize', apply)
-    }
-  }, [])
-
   useEffect(() => {
     document.title = phase.kind === 'playing' ? `${phase.stream.channel.author} - Slipstream` : 'Slipstream'
   }, [phase])
@@ -960,6 +929,7 @@ export default function App(): React.JSX.Element {
             {!chatClosed && !chatVisible && <span style={{ fontSize: 11 }}>chat</span>}
           </button>
         </div>
+        <WindowControls />
       </header>
 
       <Favourites

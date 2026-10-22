@@ -13,7 +13,7 @@ import type {
 
 /**
  * The entire main-process surface the renderer can reach. Deliberately tiny:
- * three read-only calls, no event emitters, nothing that takes a path or a URL.
+ * Named operations only; no arbitrary IPC channels or window methods exposed.
  */
 const api = {
   /** A channel name, a twitch.tv link, or a twitch.tv/videos/<id> VOD link. */
@@ -36,6 +36,18 @@ const api = {
   },
 
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
+
+  windowControls: {
+    minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+    toggleMaximize: (): Promise<void> => ipcRenderer.invoke('window:toggleMaximize'),
+    close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+    onMaximized: (cb: (maximized: boolean) => void): (() => void) => {
+      const handler = (_event: unknown, maximized: boolean): void => cb(maximized)
+      ipcRenderer.on('window:maximized', handler)
+      return () => ipcRenderer.removeListener('window:maximized', handler)
+    }
+  },
 
   auth: {
     status: (): Promise<AuthStatus> => ipcRenderer.invoke('auth:status'),

@@ -57,8 +57,7 @@ if (!app.isPackaged) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.SLIPSTREAM_DEBUG_PORT ?? '9222')
 }
 
-/** Colours here must track --bg / --text in the renderer's tokens.css. */
-const TITLEBAR = { color: '#0B0B0F', symbolColor: '#9A9AA8', height: 40 }
+const WINDOW_BACKGROUND = '#0B0B0F'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -67,14 +66,14 @@ function createWindow(): BrowserWindow {
     minWidth: 780,
     minHeight: 460,
     show: false,
-    backgroundColor: TITLEBAR.color,
+    backgroundColor: WINDOW_BACKGROUND,
     title: 'Slipstream',
     // A packaged build takes its taskbar icon from the .exe itself; this is
     // what gives the dev run the same one instead of Electron's default.
     ...(isDev ? { icon: join(__dirname_, '../../build/icon.ico') } : {}),
     autoHideMenuBar: true,
-    titleBarStyle: 'hidden',
-    ...(process.platform === 'win32' ? { titleBarOverlay: TITLEBAR } : {}),
+    // The renderer places window controls inside its floating titlebar.
+    frame: false,
     webPreferences: {
       preload: join(__dirname_, '../preload/index.cjs'),
       sandbox: true,
@@ -103,6 +102,11 @@ function createWindow(): BrowserWindow {
   win.webContents.once('did-finish-load', reveal)
   const failsafe = setTimeout(reveal, 4000)
   win.on('closed', () => clearTimeout(failsafe))
+  const sendWindowState = (): void => {
+    win.webContents.send('window:maximized', win.isMaximized())
+  }
+  win.on('maximize', sendWindowState)
+  win.on('unmaximize', sendWindowState)
 
   // This app never navigates. Anything that tries is either a mistake or hostile.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -152,6 +156,23 @@ function applyResponseHeaders(): void {
 function guardVodCdn(): void {
   session.defaultSession.webRequest.onBeforeRequest({ urls: [`${VOD_CDN}/*`] }, (details, callback) =>
     callback({ cancel: !vodRequestAllowed(details.url) })
+  )
+}
+
+function registerWindowIpc(): void {
+  ipcMain.handle('window:minimize', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize()
+  })
+  ipcMain.handle('window:toggleMaximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win?.isMaximized()) win.unmaximize()
+    else win?.maximize()
+  })
+  ipcMain.handle('window:close', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close()
+  })
+  ipcMain.handle('window:isMaximized', (event) =>
+    BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
   )
 }
 
@@ -300,6 +321,7 @@ if (!app.requestSingleInstanceLock()) {
     guardVodCdn()
     registerIpc()
     registerAuthIpc()
+    registerWindowIpc()
     createWindow()
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

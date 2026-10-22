@@ -540,11 +540,31 @@ input { font: inherit; color: inherit; }
   flex: none;
 }
 
-/* Keep clear of the native minimise/maximise/close overlay when it is active. */
-.titlebar {
-  /* Native Windows controls stay in their own area; the floating bar stops
-     before them instead of drawing underneath their square hit targets. */
-  margin-right: max(0px, calc(var(--titlebar-inset-right, 0px) - var(--shell-inset)));
+.window-controls {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--stroke);
+}
+.window-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--muted);
+  -webkit-app-region: no-drag;
+}
+.window-button:hover { background: var(--card-2); color: var(--text); }
+.window-button-close:hover { background: var(--danger); color: var(--on-danger); }
+.window-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.window-button:disabled { opacity: 0.45; cursor: default; }
+
+@media (max-width: 900px) {
+  .window-controls { padding-left: 6px; gap: 0; }
+  .window-button { width: 28px; height: 32px; }
 }
 
 /* ------------------------------------------------------------- DVR bar */
