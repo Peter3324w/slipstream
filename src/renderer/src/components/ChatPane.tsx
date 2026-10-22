@@ -4,7 +4,6 @@ import type { VodChatState } from '@/chat/vodChat'
 import { ChevronLeft, ChevronRight, Clock, Power } from './Icons'
 import { EmoteToggle, data } from './EmoteToggle'
 import { ChatInput } from './ChatInput'
-import { GlassSurface } from './GlassSurface'
 
 interface Props {
   logRef: RefObject<HTMLDivElement | null>
@@ -85,7 +84,6 @@ export function ChatPane(props: Props): React.JSX.Element {
 
   return (
     <aside className="chat glass-panel">
-      <GlassSurface />
       <div className="chat-head">
         <button
           className="panel-toggle"

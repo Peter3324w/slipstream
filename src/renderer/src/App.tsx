@@ -25,7 +25,6 @@ import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
 import { ThemePicker } from './components/ThemePicker'
 import { WindowControls } from './components/WindowControls'
-import { GlassSurface } from './components/GlassSurface'
 
 type Phase =
   | { kind: 'idle' }
@@ -817,7 +816,6 @@ export default function App(): React.JSX.Element {
       className={`app ${chatVisible ? '' : 'chat-hidden'} ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed ? 'chat-collapsed' : ''}`}
     >
       <header className="titlebar glass-panel">
-        <GlassSurface />
         <div className="wordmark">
           <span className="dot" />
           Slipstream

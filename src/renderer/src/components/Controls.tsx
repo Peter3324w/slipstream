@@ -1,6 +1,5 @@
 import type { Storyboard } from '@shared/types'
 import { useEffect, useRef, useState } from 'react'
-import { GlassSurface } from './GlassSurface'
 import type { QualityLevel } from '@/player/hls'
 import { Layers, Pause, Play, Stop, Volume, VolumeOff } from './Icons'
 import { DvrBar } from './DvrBar'
@@ -56,7 +55,6 @@ export function Controls(props: Props): React.JSX.Element {
 
   return (
     <div className="controls glass-panel">
-      <GlassSurface />
       <button
         className="ctl"
         onClick={props.onPlayPause}

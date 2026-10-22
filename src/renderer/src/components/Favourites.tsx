@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { ChannelSummary } from '@shared/types'
 import { parseChannelInput } from '@shared/channel'
 import { ChevronLeft, ChevronRight } from './Icons'
-import { GlassSurface } from './GlassSurface'
 
 interface Props {
   channels: ChannelSummary[]
@@ -63,7 +62,6 @@ export function Favourites(props: Props): React.JSX.Element {
 
   return (
     <nav className="rail glass-panel">
-      <GlassSurface />
       <div className="rail-head">
         {!props.collapsed && <span>Favourites</span>}
         {!props.collapsed && props.channels.length > 0 && (
