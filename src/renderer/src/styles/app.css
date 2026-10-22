@@ -130,19 +130,20 @@ input { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn-icon { width: 28px; padding: 0; display: grid; place-items: center; }
 
-/* Stream details belong to the player, with a separate title line so long
-   broadcasts remain readable without competing with navigation controls. */
+/* Float stream details over the player's existing black letterbox area rather
+   than reserving a separate header row or painting another panel. */
 .now-playing {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  pointer-events: none;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 5px 10px;
   padding: 12px 16px;
   min-width: 0;
-  flex: none;
   overflow: hidden;
-  border-bottom: 1px solid var(--stroke-soft);
-  border-radius: calc(var(--panel-radius) - 1px) calc(var(--panel-radius) - 1px) 0 0;
 }
 .now-playing .live-dot,
 .now-playing .vod-dot { flex: none; }
@@ -163,7 +164,6 @@ input { font: inherit; color: inherit; }
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.stage:has(.now-playing) .video-wrap { border-radius: 0; }
 .live-dot {
   display: inline-flex; align-items: center; gap: 5px;
   color: var(--danger); font-size: 11px; font-weight: 700;

@@ -927,7 +927,7 @@ export default function App(): React.JSX.Element {
 
       <main className="stage glass-frame">
         {stream && (
-          <header className="now-playing glass-panel">
+          <header className="now-playing">
             {stream.kind === 'vod' ? (
               <span className="vod-dot" title={vodAge(stream.video?.recordedAt)}>
                 vod
