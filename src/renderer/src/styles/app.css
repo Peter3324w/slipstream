@@ -24,12 +24,29 @@ input { font: inherit; color: inherit; }
 
 .app {
   height: 100%;
+  padding: var(--shell-inset);
+  gap: var(--panel-gap);
   display: grid;
-  grid-template-rows: var(--titlebar-h) 1fr;
-  grid-template-columns: auto 1fr auto;
+  grid-template-rows: 48px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "titlebar titlebar titlebar"
     "rail stage chat";
+}
+
+/* Remove the empty grid tracks as well as the panels, so hiding either side
+   gives that space back to the player without leaving a second gutter. */
+.app.rail-hidden {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "titlebar titlebar" "stage chat";
+}
+.app.chat-hidden {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "titlebar titlebar" "rail stage";
+}
+.app.rail-hidden.chat-hidden {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "titlebar" "stage";
 }
 
 /* ------------------------------------------------------------- titlebar */
@@ -39,9 +56,13 @@ input { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 12px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--stroke-soft);
+  padding: 0 16px;
+  min-width: 0;
+  position: relative;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--panel-radius);
   -webkit-app-region: drag;
 }
 .titlebar > * { -webkit-app-region: no-drag; }
@@ -61,15 +82,17 @@ input { font: inherit; color: inherit; }
   box-shadow: 0 0 10px var(--accent);
 }
 
-.channel-form { display: flex; align-items: center; gap: 6px; }
+.channel-form { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 340px; }
+.channel-form .btn { flex: none; }
 
 .channel-input {
-  width: 220px;
-  height: 28px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
   padding: 0 10px;
   background: var(--surface);
   border: 1px solid var(--stroke);
-  border-radius: var(--r-sm);
+  border-radius: 16px;
   outline: none;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -154,10 +177,20 @@ input { font: inherit; color: inherit; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: #000;
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--panel-radius);
+  container-type: inline-size;
 }
 
-.video-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.video-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: calc(var(--panel-radius) - 1px) calc(var(--panel-radius) - 1px) 0 0;
+}
 .video-wrap video {
   width: 100%; height: 100%;
   display: block;
@@ -286,8 +319,10 @@ input { font: inherit; color: inherit; }
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: var(--bg);
+  background: var(--surface);
   border-top: 1px solid var(--stroke-soft);
+  border-radius: 0 0 calc(var(--panel-radius) - 1px) calc(var(--panel-radius) - 1px);
+  flex-shrink: 0;
 }
 .controls .spacer { flex: 1; }
 
@@ -366,7 +401,8 @@ input { font: inherit; color: inherit; }
   flex-direction: column;
   min-height: 0;
   background: var(--surface);
-  border-left: 1px solid var(--stroke-soft);
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--panel-radius);
 }
 .app.chat-hidden .chat { display: none; }
 
@@ -387,7 +423,8 @@ input { font: inherit; color: inherit; }
 
 .chat-head {
   display: flex; align-items: center; gap: 7px;
-  height: 38px; padding: 0 12px;
+  min-height: 48px; padding: 0 12px;
+  flex-shrink: 0;
   border-bottom: 1px solid var(--stroke-soft);
   font-size: 12px; font-weight: 600; color: var(--text-2);
   letter-spacing: 0.02em;
@@ -503,14 +540,11 @@ input { font: inherit; color: inherit; }
   flex: none;
 }
 
-/*
- * Keep clear of the native minimise/maximise/close overlay. env() resolves to
- * the width Electron leaves us; the fallback collapses the calc to a plain 8px.
- */
+/* Keep clear of the native minimise/maximise/close overlay when it is active. */
 .titlebar {
-  /* App.tsx sets the variable from the real overlay rect; env() covers the case
-     where it has not run yet, and 8px covers a plain browser with no overlay. */
-  padding-right: var(--titlebar-inset-right, calc(100% - env(titlebar-area-width, 100%) + 8px));
+  /* Native Windows controls stay in their own area; the floating bar stops
+     before them instead of drawing underneath their square hit targets. */
+  margin-right: max(0px, calc(var(--titlebar-inset-right, 0px) - var(--shell-inset)));
 }
 
 /* ------------------------------------------------------------- DVR bar */
@@ -835,7 +869,8 @@ input { font: inherit; color: inherit; }
   flex-direction: column;
   min-height: 0;
   background: var(--surface);
-  border-right: 1px solid var(--stroke-soft);
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--panel-radius);
 }
 .app.rail-hidden .rail { display: none; }
 
@@ -865,7 +900,8 @@ input { font: inherit; color: inherit; }
 .rail-head {
   display: flex;
   align-items: center;
-  height: 38px;
+  min-height: 48px;
+  flex-shrink: 0;
   padding: 0 12px;
   border-bottom: 1px solid var(--stroke-soft);
   font-size: 12px;
@@ -1158,3 +1194,30 @@ input { font: inherit; color: inherit; }
 .accent-field input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 .accent-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+/* Let the player controls respond to the video column, not the whole window:
+   both expanded sidebars leave less room than their collapsed versions. */
+@container (max-width: 720px) {
+  .controls { flex-wrap: wrap; gap: 6px; padding: 10px; }
+  .controls > .dvr { order: -1; flex-basis: 100%; }
+  .controls .volume { margin-left: auto; }
+}
+
+@media (max-width: 1100px) {
+  .titlebar { gap: 8px; padding-inline: 12px; }
+  .titlebar .now-playing { display: none; }
+  .channel-form { flex: 1; }
+  .rail { width: 180px; }
+  .chat { width: 320px; }
+}
+
+@media (max-width: 900px) {
+  .app { --shell-inset: 12px; --panel-gap: 8px; --panel-radius: 20px; }
+  .wordmark { font-size: 12px; gap: 6px; padding-left: 0; }
+  .titlebar-actions { gap: 0; }
+  .titlebar-actions .ctl { padding-inline: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail, .chat { transition: none; }
+}

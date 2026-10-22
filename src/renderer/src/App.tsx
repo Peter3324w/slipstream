@@ -747,7 +747,9 @@ export default function App(): React.JSX.Element {
 
     const apply = (): void => {
       const rect = wco.getTitlebarAreaRect()
-      const inset = Math.max(0, window.innerWidth - (rect.x + rect.width))
+      // An inactive overlay reports an empty rect, not a full-window titlebar.
+      // Reserving innerWidth in that case would squeeze the floating bar away.
+      const inset = rect.width > 0 ? Math.max(0, window.innerWidth - (rect.x + rect.width)) : 0
       document.documentElement.style.setProperty('--titlebar-inset-right', `${inset + 8}px`)
     }
     apply()

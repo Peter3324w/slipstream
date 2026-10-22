@@ -92,6 +92,9 @@
   --chat-w: 340px;
   /* Width of a side panel folded to a strip. */
   --strip-w: 40px;
+  --shell-inset: 16px;
+  --panel-gap: 12px;
+  --panel-radius: 24px;
 
   --font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, monospace;
