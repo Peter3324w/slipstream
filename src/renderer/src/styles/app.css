@@ -32,6 +32,12 @@ input { font: inherit; color: inherit; }
   grid-template-areas:
     "titlebar titlebar titlebar"
     "rail stage chat";
+  /* A still, local backdrop gives the glass something to refract without
+     downloading artwork or running an animated background. */
+  background:
+    radial-gradient(ellipse at 0% 0%, rgb(var(--accent-rgb) / 0.19), transparent 58%),
+    radial-gradient(ellipse at 100% 100%, rgb(var(--wash-rgb) / 0.07), transparent 55%),
+    var(--bg);
 }
 
 /* Remove the empty grid tracks as well as the panels, so hiding either side
@@ -1240,4 +1246,65 @@ input { font: inherit; color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .rail, .chat { transition: none; }
+}
+
+/* -------------------------------------------------------- liquid glass */
+
+.glass-panel {
+  position: relative;
+  isolation: isolate;
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
+  border-color: rgb(var(--wash-rgb) / 0.14);
+  box-shadow:
+    0 10px 28px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(var(--wash-rgb) / 0.16),
+    inset 0 -1px 0 rgb(var(--wash-rgb) / 0.04);
+}
+
+.liquid-skin {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.titlebar > .liquid-skin { -webkit-app-region: drag; }
+
+/* The upstream component measures on window resize. CSS keeps its decorative
+   layers fitted during sidebar-collapse transitions and responsive reflow too. */
+.liquid-skin > * {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: inherit !important;
+  transition: none !important;
+}
+.liquid-root > svg { width: 100%; height: 100%; }
+.liquid-root .glass {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+.liquid-root .glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+    rgb(var(--wash-rgb) / 0.08),
+    rgb(var(--wash-rgb) / 0.015) 40%,
+    rgb(var(--wash-rgb) / 0.04));
+}
+
+.glass-frame {
+  border-color: rgb(var(--wash-rgb) / 0.16);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(var(--wash-rgb) / 0.12);
+}
+.controls.glass-panel { border-radius: 0 0 calc(var(--panel-radius) - 1px) calc(var(--panel-radius) - 1px); }
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel { background: var(--surface); }
+  .liquid-skin { display: none; }
 }

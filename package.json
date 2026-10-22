@@ -32,6 +32,7 @@
     "@capacitor/android": "^7.6.9",
     "@capacitor/core": "^7.6.9",
     "hls.js": "^1.7.3",
+    "liquid-glass-react": "1.1.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

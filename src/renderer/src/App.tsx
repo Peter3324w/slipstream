@@ -25,6 +25,7 @@ import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
 import { ThemePicker } from './components/ThemePicker'
 import { WindowControls } from './components/WindowControls'
+import { GlassSurface } from './components/GlassSurface'
 
 type Phase =
   | { kind: 'idle' }
@@ -815,7 +816,8 @@ export default function App(): React.JSX.Element {
     <div
       className={`app ${chatVisible ? '' : 'chat-hidden'} ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed ? 'chat-collapsed' : ''}`}
     >
-      <header className="titlebar">
+      <header className="titlebar glass-panel">
+        <GlassSurface />
         <div className="wordmark">
           <span className="dot" />
           Slipstream
@@ -942,7 +944,7 @@ export default function App(): React.JSX.Element {
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
-      <main className="stage">
+      <main className="stage glass-frame">
         <div className="video-wrap" ref={wrapRef}>
           <video ref={videoRef} playsInline />
           {zoom.scale > 1 && (
