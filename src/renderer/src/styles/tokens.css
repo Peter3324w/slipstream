@@ -89,7 +89,7 @@
 
   /* ── Slipstream's own, with no PlayTime counterpart ───────────────────── */
   --titlebar-h: 40px;
-  --chat-w: 340px;
+  --chat-w: 320px;
   /* Width of a side panel folded to a strip. */
   --strip-w: 40px;
   --shell-inset: 16px;

@@ -1233,7 +1233,7 @@ input { font: inherit; color: inherit; }
   .titlebar .now-playing { display: none; }
   .channel-form { flex: 1; }
   .rail { width: 180px; }
-  .chat { width: 320px; }
+  .chat { width: 300px; }
 }
 
 @media (max-width: 900px) {
