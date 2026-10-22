@@ -841,23 +841,6 @@ export default function App(): React.JSX.Element {
           </button>
         </form>
 
-        {stream && (
-          <div className="now-playing">
-            {stream.kind === 'vod' ? (
-              <span className="vod-dot" title={vodAge(stream.video?.recordedAt)}>
-                vod
-              </span>
-            ) : (
-              <span className="live-dot">live</span>
-            )}
-            <span className="who">{stream.channel.author}</span>
-            <span className="what">
-              {stream.channel.category ? `${stream.channel.category} - ` : ''}
-              {stream.channel.title}
-            </span>
-          </div>
-        )}
-
         <div className="titlebar-actions">
           {channel && (
             <button
@@ -943,6 +926,22 @@ export default function App(): React.JSX.Element {
       />
 
       <main className="stage glass-frame">
+        {stream && (
+          <header className="now-playing glass-panel">
+            {stream.kind === 'vod' ? (
+              <span className="vod-dot" title={vodAge(stream.video?.recordedAt)}>
+                vod
+              </span>
+            ) : (
+              <span className="live-dot">live</span>
+            )}
+            <span className="who" title={stream.channel.author}>{stream.channel.author}</span>
+            <span className="what" title={stream.channel.title ?? undefined}>
+              {stream.channel.category ? `${stream.channel.category} - ` : ''}
+              {stream.channel.title}
+            </span>
+          </header>
+        )}
         <div className="video-wrap" ref={wrapRef}>
           <video ref={videoRef} playsInline />
           {zoom.scale > 1 && (
