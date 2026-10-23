@@ -810,6 +810,11 @@ export default function App(): React.JSX.Element {
   // failed first poll shows "nothing here yet" over a list that is on disk.
   const rows = favourites.map((login) => summaries.find((s) => s.login === login) ?? unchecked(login))
 
+  const toggleChatPanel = (): void => {
+    if (!chatVisible) toggleChat()
+    if (chatVisible || chatCollapsed) toggleChatCollapsed()
+  }
+
   return (
     <div
       className={`app ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed || !chatVisible ? 'chat-collapsed' : ''}`}
@@ -962,10 +967,7 @@ export default function App(): React.JSX.Element {
             hudVisible={hudVisible}
             onHud={() => setHudVisible((visible) => !visible)}
             collapsed={chatCollapsed || !chatVisible}
-            onCollapse={() => {
-              if (!chatVisible) toggleChat()
-              if (chatVisible || chatCollapsed) toggleChatCollapsed()
-            }}
+            onCollapse={toggleChatPanel}
             vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
             synced={chatSync}
             onSync={toggleChatSync}
@@ -981,6 +983,7 @@ export default function App(): React.JSX.Element {
         state={chatState}
         channel={channel}
         collapsed={chatCollapsed || !chatVisible}
+        onToggleCollapsed={toggleChatPanel}
         showJump={showJump}
         onJump={() => listRef.current?.jumpToLatest()}
         closed={chatClosed}
