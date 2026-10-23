@@ -895,7 +895,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
         current={channel}
         collapsed={railCollapsed}
         onToggleCollapsed={toggleRailCollapsed}
-        onPick={browse}
+        onPick={(login) => void start(login)}
         onRemove={(login) => void mutateFavourites(window.slipstream.favourites.remove, login)}
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
