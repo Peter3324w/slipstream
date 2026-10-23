@@ -59,7 +59,7 @@ input { font: inherit; color: inherit; }
 .titlebar {
   grid-area: titlebar;
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) minmax(0, 600px) minmax(112px, 1fr);
+  grid-template-columns: minmax(146px, 1fr) minmax(0, 600px) minmax(146px, 1fr);
   align-items: center;
   gap: 12px;
   padding: 0 16px;
