@@ -58,7 +58,8 @@ input { font: inherit; color: inherit; }
 
 .titlebar {
   grid-area: titlebar;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(112px, 1fr) minmax(0, 600px) minmax(112px, 1fr);
   align-items: center;
   gap: 12px;
   padding: 0 16px;
@@ -87,8 +88,40 @@ input { font: inherit; color: inherit; }
   box-shadow: 0 0 10px var(--accent);
 }
 
-.channel-form { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 340px; }
-.channel-form .btn { flex: none; }
+.channel-form {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 36px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+}
+.channel-form:focus-within { border-color: var(--accent); }
+.channel-form .channel-input {
+  flex: 1;
+  height: 100%;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.channel-form .channel-input:focus { background: transparent; }
+.channel-search-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 100%;
+  background: var(--card-2);
+  border-left: 1px solid var(--stroke);
+  color: var(--text);
+}
+.channel-search-button:hover:not(:disabled) { background: rgb(var(--wash-rgb) / 0.12); }
+.channel-search-button:disabled { color: var(--muted); cursor: default; }
+.channel-search-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
 .channel-input {
   width: 100%;
@@ -1244,7 +1277,6 @@ input { font: inherit; color: inherit; }
 
 @media (max-width: 1100px) {
   .titlebar { gap: 8px; padding-inline: 12px; }
-  .channel-form { flex: 1; }
   .rail { width: 180px; }
   .chat { width: 300px; }
 }
@@ -1307,10 +1339,10 @@ input { font: inherit; color: inherit; }
 }
 .chat-options-heading { padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .chat-option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   min-height: 36px;
   padding: 8px 10px;
@@ -1323,16 +1355,49 @@ input { font: inherit; color: inherit; }
 .chat-option:focus-visible, .chat-appearance > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .chat-option:disabled { opacity: 0.45; cursor: default; }
 .chat-option-state { color: var(--muted); font-size: 11px; flex: none; }
+.chat-option-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; color: var(--muted); }
+.chat-option[aria-checked='true'] .chat-option-icon { color: var(--accent); }
 .chat-option[aria-checked='true'] .chat-option-state { color: var(--accent); }
 .chat-options-data { padding: 6px 10px; font-size: 11px; color: var(--muted); }
 .chat-options-separator { height: 1px; margin: 6px; background: var(--stroke-soft); }
 .chat-appearance > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
   padding: 10px;
   font-size: 12px;
   color: var(--text-2);
   cursor: pointer;
   border-radius: var(--r-sm);
 }
+.chat-appearance > summary::-webkit-details-marker { display: none; }
+.chat-appearance-arrow { display: flex; margin-left: auto; color: var(--muted); }
+.chat-appearance[open] .chat-appearance-arrow { transform: rotate(90deg); }
 .chat-appearance .theme-wrap { display: block; }
 .theme-inline { display: flex; flex-direction: column; gap: 2px; padding: 4px; }
 .theme-inline .theme-opt { width: 100%; }
+
+/* Fullscreen keeps playback controls with the video, outside the app shell. */
+.stage:fullscreen {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+}
+.stage:fullscreen .video-wrap,
+.stage:fullscreen .controls { border-radius: 0; }
+.stage:fullscreen .controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+}
+.stage:fullscreen.controls-hidden .controls {
+  opacity: 0;
+  pointer-events: none;
+}
+.stage:fullscreen.controls-hidden,
+.stage:fullscreen.controls-hidden * { cursor: none !important; }

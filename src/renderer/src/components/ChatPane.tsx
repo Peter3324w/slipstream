@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from 'react'
 import type { ChatState } from '@/chat/irc'
 import type { VodChatState } from '@/chat/vodChat'
 import { ChatInput } from './ChatInput'
+import { ChevronLeft, ChevronRight } from './Icons'
 
 interface Props {
   menu: ReactNode
@@ -13,6 +14,7 @@ interface Props {
    * but the panel stays where you can see it is there and open it again.
    */
   collapsed: boolean
+  onToggleCollapsed: () => void
   showJump: boolean
   onJump: () => void
   /** Closed means the socket is gone, not merely off screen. */
@@ -67,6 +69,13 @@ export function ChatPane(props: Props): React.JSX.Element {
   return (
     <aside className="chat glass-panel">
       <div className="chat-head">
+        <button className="panel-toggle" type="button" onClick={props.onToggleCollapsed}
+          onKeyDown={(event) => event.stopPropagation()}
+          title={props.collapsed ? 'Expand chat' : 'Collapse chat'}
+          aria-label={props.collapsed ? 'Expand chat' : 'Collapse chat'}
+          aria-expanded={!props.collapsed}>
+          {props.collapsed ? <ChevronLeft /> : <ChevronRight />}
+        </button>
         {!props.collapsed && (
           <>
             <span className="chat-name" title={props.channel ? `#${props.channel}` : undefined}>

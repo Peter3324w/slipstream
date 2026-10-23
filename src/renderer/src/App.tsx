@@ -11,6 +11,7 @@ import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseWatchInput, type WatchTarget } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { useVideoZoom } from './player/zoom'
+import { useFullscreenControls } from './player/useFullscreenControls'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
 import { ChatSync } from './chat/sync'
@@ -132,6 +133,8 @@ function bridgeReady(): boolean {
 export default function App(): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLElement>(null)
+  const fullscreenControlsHidden = useFullscreenControls(stageRef)
   const zoom = useVideoZoom(wrapRef, videoRef)
   const logRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
@@ -810,6 +813,11 @@ export default function App(): React.JSX.Element {
   // failed first poll shows "nothing here yet" over a list that is on disk.
   const rows = favourites.map((login) => summaries.find((s) => s.login === login) ?? unchecked(login))
 
+  const toggleChatPanel = (): void => {
+    if (!chatVisible) toggleChat()
+    if (chatVisible || chatCollapsed) toggleChatCollapsed()
+  }
+
   return (
     <div
       className={`app ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed || !chatVisible ? 'chat-collapsed' : ''}`}
@@ -829,14 +837,21 @@ export default function App(): React.JSX.Element {
         >
           <input
             className="channel-input"
-            placeholder="channel, or a twitch.tv/videos link"
+            placeholder="Search"
+            aria-label="Search for a channel or Twitch video"
+            title="Enter a channel name or Twitch video link"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             spellCheck={false}
             autoComplete="off"
           />
-          <button className="btn btn-primary" type="submit" disabled={!input.trim()}>
-            Watch
+          <button className="channel-search-button" type="submit" disabled={!input.trim()}
+            title="Search" aria-label="Search">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="7.5" />
+              <path d="m16 16 5 5" />
+            </svg>
           </button>
         </form>
 
@@ -853,7 +868,7 @@ export default function App(): React.JSX.Element {
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
-      <main className="stage glass-frame">
+      <main className={`stage glass-frame${fullscreenControlsHidden ? ' controls-hidden' : ''}`} ref={stageRef}>
         {stream && (
           <header className="now-playing">
             {stream.kind === 'vod' ? (
@@ -896,6 +911,7 @@ export default function App(): React.JSX.Element {
         </div>
 
         <Controls
+          fullscreenTarget={stageRef}
           ready={phase.kind === 'playing'}
           vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
           storyboard={phase.kind === 'playing' ? phase.stream.video?.storyboard : null}
@@ -955,10 +971,7 @@ export default function App(): React.JSX.Element {
             hudVisible={hudVisible}
             onHud={() => setHudVisible((visible) => !visible)}
             collapsed={chatCollapsed || !chatVisible}
-            onCollapse={() => {
-              if (!chatVisible) toggleChat()
-              if (chatVisible || chatCollapsed) toggleChatCollapsed()
-            }}
+            onCollapse={toggleChatPanel}
             vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
             synced={chatSync}
             onSync={toggleChatSync}
@@ -974,6 +987,7 @@ export default function App(): React.JSX.Element {
         state={chatState}
         channel={channel}
         collapsed={chatCollapsed || !chatVisible}
+        onToggleCollapsed={toggleChatPanel}
         showJump={showJump}
         onJump={() => listRef.current?.jumpToLatest()}
         closed={chatClosed}
