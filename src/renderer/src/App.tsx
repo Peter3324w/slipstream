@@ -130,7 +130,12 @@ function bridgeReady(): boolean {
   return typeof window.slipstream?.resolve === 'function'
 }
 
-export default function App(): React.JSX.Element {
+interface AppProps {
+  initialWatch?: string
+  onHome?: () => void
+}
+
+export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLElement>(null)
@@ -616,6 +621,15 @@ export default function App(): React.JSX.Element {
     }
   }, [refresh])
 
+  // Only the mobile home supplies an initial selection. Mount the player first,
+  // then resolve it; invalidate pending requests when returning home.
+  useEffect(() => {
+    if (!initialWatch) return
+    setInput(initialWatch)
+    void start(initialWatch)
+    return () => { targetRef.current = null }
+  }, [initialWatch, start])
+
   // video element -> react state
   useEffect(() => {
     const video = videoRef.current
@@ -823,6 +837,9 @@ export default function App(): React.JSX.Element {
       className={`app ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed || !chatVisible ? 'chat-collapsed' : ''}`}
     >
       <header className="titlebar glass-panel">
+        {onHome && <button className="mobile-back" aria-label="Back to home" onClick={() => { stop(); onHome() }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14" /></svg>
+        </button>}
         <div className="wordmark">
           <span className="dot" />
           Slipstream
