@@ -13,6 +13,20 @@ const base = (size: number): React.SVGProps<SVGSVGElement> => ({
   strokeLinejoin: 'round' as const
 })
 
+export const Smile = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 14a4.5 4.5 0 0 0 8 0M8.5 8.5h.01M15.5 8.5h.01" />
+  </svg>
+)
+
+export const User = ({ size = 16 }: P): React.JSX.Element => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
+  </svg>
+)
+
 export const Play = ({ size = 16 }: P): React.JSX.Element => (
   <svg {...base(size)} fill="currentColor" stroke="none">
     <path d="M7 4.5v15l12-7.5z" />

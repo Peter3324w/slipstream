@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ThemePicker } from './ThemePicker'
 import { data } from './EmoteToggle'
+import { ChevronLeft, ChevronRight, Clock, Gauge, Palette, Power, Rail, Smile, Star, User } from './Icons'
 
 interface Props {
   channel: string | null
@@ -84,39 +85,51 @@ export function ChatMenu(props: Props): React.JSX.Element {
         <div className="chat-options-heading">Chat options</div>
         {!props.vod && (
           <button className="chat-option" role="switch" aria-label="Sync chat to video" aria-checked={props.synced} onClick={props.onSync}>
+            <span className="chat-option-icon" aria-hidden="true"><Clock size={16} /></span>
             <span>Sync chat to video</span><span className="chat-option-state">{props.synced ? 'On' : 'Off'}</span>
           </button>
         )}
         <button className="chat-option" role="switch" aria-label="Show emotes" aria-checked={props.emotesOn} onClick={props.onEmotes}
           title={`Emote images downloaded: ${data(props.emoteBytes)}`}>
+          <span className="chat-option-icon" aria-hidden="true"><Smile /></span>
           <span>Show emotes</span><span className="chat-option-state">{props.emotesOn ? 'On' : 'Off'}</span>
         </button>
         <button className="chat-option" onClick={() => action(props.onConnection)}>
+          <span className="chat-option-icon" aria-hidden="true"><Power size={16} /></span>
           <span>{props.closed ? 'Connect chat' : 'Disconnect chat'}</span>
         </button>
         <button className="chat-option" onClick={() => action(props.onCollapse)}>
+          <span className="chat-option-icon" aria-hidden="true">{props.collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}</span>
           <span>{props.collapsed ? 'Expand chat' : 'Collapse chat'}</span>
         </button>
         <div className="chat-options-data">Chat {data(props.bytes)} · Emotes {data(props.emoteBytes)}</div>
         <div className="chat-options-separator" />
         {props.channel && (
           <button className="chat-option" onClick={() => action(props.onFavourite)}>
+            <span className="chat-option-icon" aria-hidden="true"><Star /></span>
             <span>{props.favourite ? 'Remove channel from favourites' : 'Add channel to favourites'}</span>
           </button>
         )}
         <button className="chat-option" role="switch" aria-label="Show favourites" aria-checked={props.railVisible} onClick={props.onRail}>
+          <span className="chat-option-icon" aria-hidden="true"><Rail /></span>
           <span>Show favourites</span><span className="chat-option-state">{props.railVisible ? 'On' : 'Off'}</span>
         </button>
         {props.showSignIn && (
           <button className="chat-option" disabled={!props.canSignIn} onClick={() => action(props.onSignIn)}>
+            <span className="chat-option-icon" aria-hidden="true"><User /></span>
             <span>{props.accountLabel}</span>
           </button>
         )}
         <button className="chat-option" role="switch" aria-label="Memory readout" aria-checked={props.hudVisible} onClick={props.onHud}>
+          <span className="chat-option-icon" aria-hidden="true"><Gauge /></span>
           <span>Memory readout</span><span className="chat-option-state">{props.hudVisible ? 'On' : 'Off'}</span>
         </button>
         <details className="chat-appearance">
-          <summary>Appearance</summary>
+          <summary>
+            <span className="chat-option-icon" aria-hidden="true"><Palette /></span>
+            <span>Appearance</span>
+            <span className="chat-appearance-arrow" aria-hidden="true"><ChevronRight /></span>
+          </summary>
           <ThemePicker inline />
         </details>
       </div>
