@@ -1388,3 +1388,16 @@ input { font: inherit; color: inherit; }
 }
 .stage:fullscreen .video-wrap,
 .stage:fullscreen .controls { border-radius: 0; }
+.stage:fullscreen .controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+}
+.stage:fullscreen.controls-hidden .controls {
+  opacity: 0;
+  pointer-events: none;
+}
+.stage:fullscreen.controls-hidden,
+.stage:fullscreen.controls-hidden * { cursor: none !important; }

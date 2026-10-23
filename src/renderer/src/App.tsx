@@ -11,6 +11,7 @@ import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseWatchInput, type WatchTarget } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
 import { useVideoZoom } from './player/zoom'
+import { useFullscreenControls } from './player/useFullscreenControls'
 import { TwitchChat, type ChatState } from './chat/irc'
 import { ChatList } from './chat/messageList'
 import { ChatSync } from './chat/sync'
@@ -133,6 +134,7 @@ export default function App(): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLElement>(null)
+  const fullscreenControlsHidden = useFullscreenControls(stageRef)
   const zoom = useVideoZoom(wrapRef, videoRef)
   const logRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
@@ -866,7 +868,7 @@ export default function App(): React.JSX.Element {
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
-      <main className="stage glass-frame" ref={stageRef}>
+      <main className={`stage glass-frame${fullscreenControlsHidden ? ' controls-hidden' : ''}`} ref={stageRef}>
         {stream && (
           <header className="now-playing">
             {stream.kind === 'vod' ? (
