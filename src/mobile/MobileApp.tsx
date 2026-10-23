@@ -79,7 +79,7 @@ export function MobileApp(): React.JSX.Element {
     <button type="submit" aria-label="Search" disabled={!query.trim()}><SearchIcon /></button>
   </form>
   const favouriteChannels = <ul className="mobile-favourites">
-    {favourites.map((login) => <li key={login}><button onClick={() => open(login)}>
+    {favourites.map((login) => <li key={login}><button onClick={() => setWatch(login)}>
       <span className="mobile-channel-avatar" aria-hidden="true">{login[0].toUpperCase()}</span>
       <span>{login}</span><ChevronRight size={18} />
     </button></li>)}
