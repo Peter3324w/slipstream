@@ -132,6 +132,7 @@ function bridgeReady(): boolean {
 export default function App(): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLElement>(null)
   const zoom = useVideoZoom(wrapRef, videoRef)
   const logRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
@@ -865,7 +866,7 @@ export default function App(): React.JSX.Element {
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
-      <main className="stage glass-frame">
+      <main className="stage glass-frame" ref={stageRef}>
         {stream && (
           <header className="now-playing">
             {stream.kind === 'vod' ? (
@@ -908,6 +909,7 @@ export default function App(): React.JSX.Element {
         </div>
 
         <Controls
+          fullscreenTarget={stageRef}
           ready={phase.kind === 'playing'}
           vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
           storyboard={phase.kind === 'playing' ? phase.stream.video?.storyboard : null}

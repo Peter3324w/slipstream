@@ -1,10 +1,12 @@
 import type { Storyboard } from '@shared/types'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { QualityLevel } from '@/player/hls'
 import { Layers, Pause, Play, Stop, Volume, VolumeOff } from './Icons'
 import { DvrBar } from './DvrBar'
+import { FullscreenButton } from './FullscreenButton'
 
 interface Props {
+  fullscreenTarget: RefObject<HTMLElement | null>
   ready: boolean
   playing: boolean
   onPlayPause: () => void
@@ -111,6 +113,8 @@ export function Controls(props: Props): React.JSX.Element {
           aria-label="Volume"
         />
       </div>
+
+      <FullscreenButton target={props.fullscreenTarget} />
 
       <div className="menu-anchor" ref={anchor}>
         <button
