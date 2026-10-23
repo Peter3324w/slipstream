@@ -829,14 +829,21 @@ export default function App(): React.JSX.Element {
         >
           <input
             className="channel-input"
-            placeholder="channel, or a twitch.tv/videos link"
+            placeholder="Search"
+            aria-label="Search for a channel or Twitch video"
+            title="Enter a channel name or Twitch video link"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             spellCheck={false}
             autoComplete="off"
           />
-          <button className="btn btn-primary" type="submit" disabled={!input.trim()}>
-            Watch
+          <button className="channel-search-button" type="submit" disabled={!input.trim()}
+            title="Search" aria-label="Search">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="7.5" />
+              <path d="m16 16 5 5" />
+            </svg>
           </button>
         </form>
 

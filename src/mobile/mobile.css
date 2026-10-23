@@ -17,7 +17,7 @@
       "rail chat";
   }
 
-  .titlebar { flex-wrap: wrap; height: auto; row-gap: 6px; padding: 8px 12px; }
+  .titlebar { display: flex; flex-wrap: wrap; height: auto; row-gap: 6px; padding: 8px 12px; }
   .channel-form { flex: 1; min-width: 0; }
   .channel-input { flex: 1; width: auto; min-width: 0; }
   .now-playing { order: 10; flex-basis: 100%; }
