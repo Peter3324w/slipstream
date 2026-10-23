@@ -86,9 +86,6 @@
   margin: 0 auto;
   padding: 24px 18px;
   text-align: center;
-  background: var(--card-2);
-  border: 1px solid var(--stroke);
-  border-radius: 12px;
 }
 .mobile-get-started h1 { font-size: 19px; line-height: 1.35; letter-spacing: -0.4px; margin: 0 0 10px; font-weight: 650; }
 .mobile-get-started p { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 auto; max-width: 38ch; }
