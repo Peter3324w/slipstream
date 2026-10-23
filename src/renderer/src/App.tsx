@@ -19,11 +19,10 @@ import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
 import { MemoryHud } from './components/MemoryHud'
-import { ChatBubble, ChatOff, Gauge, Rail, Star, StarOn } from './components/Icons'
+import { ChatMenu } from './components/ChatMenu'
 import { Favourites } from './components/Favourites'
 import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
-import { ThemePicker } from './components/ThemePicker'
 import { WindowControls } from './components/WindowControls'
 
 type Phase =
@@ -813,7 +812,7 @@ export default function App(): React.JSX.Element {
 
   return (
     <div
-      className={`app ${chatVisible ? '' : 'chat-hidden'} ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed ? 'chat-collapsed' : ''}`}
+      className={`app ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed || !chatVisible ? 'chat-collapsed' : ''}`}
     >
       <header className="titlebar glass-panel">
         <div className="wordmark">
@@ -841,77 +840,6 @@ export default function App(): React.JSX.Element {
           </button>
         </form>
 
-        <div className="titlebar-actions">
-          {channel && (
-            <button
-              className={`ctl ${favourites.includes(channel) ? 'is-pinned' : 'is-off'}`}
-              onClick={() =>
-                void mutateFavourites(
-                  favourites.includes(channel)
-                    ? window.slipstream.favourites.remove
-                    : window.slipstream.favourites.add,
-                  channel
-                )
-              }
-              title={favourites.includes(channel) ? 'Remove from favourites' : 'Add to favourites'}
-            >
-              {favourites.includes(channel) ? <StarOn /> : <Star />}
-            </button>
-          )}
-          <button
-            className={`ctl ${railVisible ? 'is-on' : 'is-off'}`}
-            onClick={() =>
-              setRailVisible((v) => {
-                localStorage.setItem(RAIL_KEY, v ? '0' : '1')
-                return !v
-              })
-            }
-            title="Toggle favourites  (B)"
-          >
-            <Rail />
-          </button>
-          {showSignIn && (
-            <button
-              className={`ctl ${signedIn ? 'is-on' : 'is-off'}`}
-              onClick={() => setShowSignInSheet(true)}
-              // Until main has answered there is nothing to show, and a button
-              // that silently does nothing is worse than one that is plainly off.
-              disabled={!auth}
-              title={
-                !auth
-                  ? 'Sign-in unavailable - the app cannot reach its main process'
-                  : signedIn
-                    ? `Signed in as ${auth.user?.display}`
-                    : 'Sign in to Twitch'
-              }
-            >
-              <span style={{ fontSize: 11 }}>{signedIn ? auth?.user?.display : 'Sign in'}</span>
-            </button>
-          )}
-          <ThemePicker />
-          <button
-            className={`ctl ${hudVisible ? 'is-pinned' : ''}`}
-            onClick={() => setHudVisible((v) => !v)}
-            title="Memory readout  (F2)"
-          >
-            <Gauge />
-          </button>
-          <button
-            className={`ctl ${chatClosed ? 'is-closed' : chatVisible ? 'is-on' : 'is-off'}`}
-            onClick={toggleChat}
-            title={
-              chatClosed
-                ? 'Chat is closed - connect  (C)'
-                : chatVisible
-                  ? 'Hide chat, stays connected  (C)'
-                  : 'Show chat  (C)'
-            }
-          >
-            {chatClosed ? <ChatOff /> : <ChatBubble />}
-            {chatClosed && <span style={{ fontSize: 11 }}>off</span>}
-            {!chatClosed && !chatVisible && <span style={{ fontSize: 11 }}>chat</span>}
-          </button>
-        </div>
         <WindowControls />
       </header>
 
@@ -1005,24 +933,53 @@ export default function App(): React.JSX.Element {
       </main>
 
       <ChatPane
+        menu={
+          <ChatMenu
+            channel={channel}
+            favourite={channel !== null && favourites.includes(channel)}
+            onFavourite={() => {
+              if (channel) void mutateFavourites(
+                favourites.includes(channel) ? window.slipstream.favourites.remove : window.slipstream.favourites.add,
+                channel
+              )
+            }}
+            railVisible={railVisible}
+            onRail={() => setRailVisible((visible) => {
+              localStorage.setItem(RAIL_KEY, visible ? '0' : '1')
+              return !visible
+            })}
+            showSignIn={showSignIn}
+            canSignIn={!!auth}
+            accountLabel={signedIn ? `Account: ${auth?.user?.display ?? 'Twitch'}` : 'Sign in to Twitch'}
+            onSignIn={() => setShowSignInSheet(true)}
+            hudVisible={hudVisible}
+            onHud={() => setHudVisible((visible) => !visible)}
+            collapsed={chatCollapsed || !chatVisible}
+            onCollapse={() => {
+              if (!chatVisible) toggleChat()
+              if (chatVisible || chatCollapsed) toggleChatCollapsed()
+            }}
+            vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
+            synced={chatSync}
+            onSync={toggleChatSync}
+            emotesOn={twitchEmotes || emoteProviders.length > 0}
+            onEmotes={() => setAllEmotes(!(twitchEmotes || emoteProviders.length > 0))}
+            emoteBytes={emoteBytes}
+            bytes={chatBytes}
+            closed={chatClosed}
+            onConnection={chatClosed ? openChat : closeChat}
+          />
+        }
         logRef={logRef}
         state={chatState}
         channel={channel}
-        collapsed={chatCollapsed}
-        onToggleCollapsed={toggleChatCollapsed}
-        synced={chatSync}
-        onToggleSync={toggleChatSync}
+        collapsed={chatCollapsed || !chatVisible}
         showJump={showJump}
         onJump={() => listRef.current?.jumpToLatest()}
         closed={chatClosed}
-        bytes={chatBytes}
-        onClose={closeChat}
         onConnect={openChat}
         vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
         vodState={vodChatState}
-        emotesOn={twitchEmotes || emoteProviders.length > 0}
-        emoteBytes={emoteBytes}
-        onToggleEmotes={setAllEmotes}
         signedIn={signedIn}
         showSignIn={showSignIn}
         canSend={canSend}

@@ -1,11 +1,10 @@
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { ChatState } from '@/chat/irc'
 import type { VodChatState } from '@/chat/vodChat'
-import { ChevronLeft, ChevronRight, Clock, Power } from './Icons'
-import { EmoteToggle, data } from './EmoteToggle'
 import { ChatInput } from './ChatInput'
 
 interface Props {
+  menu: ReactNode
   logRef: RefObject<HTMLDivElement | null>
   state: ChatState
   channel: string | null
@@ -14,24 +13,14 @@ interface Props {
    * but the panel stays where you can see it is there and open it again.
    */
   collapsed: boolean
-  onToggleCollapsed: () => void
-  /** Chat follows the video: pausing freezes it, rewinding replays it. */
-  synced: boolean
-  onToggleSync: () => void
   showJump: boolean
   onJump: () => void
   /** Closed means the socket is gone, not merely off screen. */
   closed: boolean
-  bytes: number
-  onClose: () => void
   onConnect: () => void
   /** A VOD is replay, not a room: no sync toggle, no sending, its own states. */
   vod: boolean
   vodState: VodChatState
-  /** Emotes drawn as images, or chat read as plain names. */
-  emotesOn: boolean
-  emoteBytes: number
-  onToggleEmotes: (on: boolean) => void
   signedIn: boolean
   showSignIn: boolean
   canSend: boolean
@@ -69,15 +58,8 @@ export function ChatPane(props: Props): React.JSX.Element {
           : 'idle'
       : props.state
 
-  /*
-   * Live rides on the dot alone - connecting pulses amber, connected is a steady
-   * green - which buys back the 62px the word "connected" was taking out of a
-   * header that has no room to spare. Idle and offline keep their word: those are
-   * the two you might have to do something about.
-   *
-   * A VOD keeps its word instead, because "replay" is the one thing a viewer has
-   * to know about this chat. The sync pill is gone on a VOD, which pays for it.
-   */
+  // A connected live room needs only its dot. VOD replay and inactive states
+  // keep their labels; actions and traffic readings live in the options popup.
   const showState = props.vod
     ? props.vodState !== 'loading'
     : props.closed || props.state === 'idle' || props.state === 'closed'
@@ -85,79 +67,17 @@ export function ChatPane(props: Props): React.JSX.Element {
   return (
     <aside className="chat glass-panel">
       <div className="chat-head">
-        <button
-          className="panel-toggle"
-          onClick={props.onToggleCollapsed}
-          title={props.collapsed ? 'Expand chat' : 'Collapse chat - stays connected'}
-        >
-          {props.collapsed ? <ChevronLeft /> : <ChevronRight />}
-        </button>
-
-        {props.collapsed ? (
-          <span
-            className={`chat-state chat-state-dot is-${props.closed ? 'idle' : props.state}`}
-            title={`Chat ${label}`}
-          />
-        ) : (
+        {!props.collapsed && (
           <>
             <span className="chat-name" title={props.channel ? `#${props.channel}` : undefined}>
               {props.channel ? `#${props.channel}` : 'Chat'}
             </span>
-
-            {/* Only while the socket is actually open: once chat drops, the word
-                "offline" is what matters, and it needs the room a stale total was
-                holding - the name was squeezing to "#su..." to pay for both. */}
-            {!props.closed &&
-              (props.vod
-                ? props.vodState !== 'idle' && props.vodState !== 'failed'
-                : props.state === 'open') &&
-              props.bytes > 0 && (
-                <span
-                  className="chat-data"
-                  title={props.vod ? 'Replay fetched since this VOD started' : 'Payload received since connecting'}
-                >
-                  {data(props.bytes)}
-                </span>
-              )}
-
-            {/* Replay is synced by construction - a comment's offset is where it
-                belongs - so there is nothing here to switch. */}
-            {!props.vod && (
-              <button
-                className={`chat-7tv ${props.synced ? 'is-on' : ''}`}
-                onClick={props.onToggleSync}
-                title={
-                  props.synced
-                    ? 'Chat is synced to the video - pausing freezes it, rewinding replays it. Click for real-time chat.'
-                    : 'Chat is real-time. Click to sync it to the video.'
-                }
-              >
-                <Clock size={11} />
-                sync
-              </button>
-            )}
-
-            <EmoteToggle
-              on={props.emotesOn}
-              bytes={props.emoteBytes}
-              onToggle={props.onToggleEmotes}
-            />
-
             <span className={`chat-state is-${dot}`} title={`Chat ${label}`}>
               {showState && label}
             </span>
-
-            {!props.closed && (
-              <button
-                className="chat-close"
-                onClick={props.onClose}
-                title="Close chat - drops the connection and stops the data. Hiding it does not."
-              >
-                <Power />
-              </button>
-            )}
           </>
         )}
+        {props.menu}
       </div>
 
       <div className="chat-body">

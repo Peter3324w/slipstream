@@ -4,11 +4,12 @@ import { applyTheme, currentTheme, THEMES } from '../lib/themes'
 import { AccentPicker } from './AccentPicker'
 
 /**
- * The titlebar's theme menu. It holds the open/closed state and the id it is
+ * Theme choices, shown in a standalone menu or inline in the chat options.
+ * It holds the open/closed state and the id it is
  * showing a tick against, and nothing else — the ground itself lives on
  * <html>, so no other component has to be told a theme changed.
  */
-export function ThemePicker(): React.JSX.Element {
+export function ThemePicker({ inline = false }: { inline?: boolean }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [theme, setTheme] = useState(currentTheme)
   const wrap = useRef<HTMLDivElement>(null)
@@ -37,7 +38,7 @@ export function ThemePicker(): React.JSX.Element {
 
   return (
     <div className="theme-wrap" ref={wrap}>
-      <button
+      {!inline && <button
         className={`ctl ${open ? 'is-pinned' : 'is-off'}`}
         onClick={() => setOpen((o) => !o)}
         title="Theme"
@@ -45,15 +46,15 @@ export function ThemePicker(): React.JSX.Element {
         aria-expanded={open}
       >
         <Palette />
-      </button>
-      {open && (
-        <div className="theme-pop" role="menu">
+      </button>}
+      {(open || inline) && (
+        <div className={inline ? 'theme-inline' : 'theme-pop'} role={inline ? undefined : 'menu'}>
           {THEMES.map((t) => (
             <button
               key={t.id}
               className={`theme-opt ${theme === t.id ? 'on' : ''}`}
               onClick={() => pick(t.id)}
-              role="menuitem"
+              role={inline ? undefined : 'menuitem'}
             >
               <span className="theme-chip" style={{ background: t.dot }} />
               <span className="theme-label">{t.label}</span>
