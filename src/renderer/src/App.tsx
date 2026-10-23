@@ -24,6 +24,7 @@ import { ChatMenu } from './components/ChatMenu'
 import { Favourites } from './components/Favourites'
 import { SignIn } from './components/SignIn'
 import { Placeholder } from './components/Placeholder'
+import { ChannelProfile } from './components/ChannelProfile'
 import { WindowControls } from './components/WindowControls'
 
 type Phase =
@@ -130,7 +131,12 @@ function bridgeReady(): boolean {
   return typeof window.slipstream?.resolve === 'function'
 }
 
-export default function App(): React.JSX.Element {
+interface AppProps {
+  initialWatch?: string
+  onHome?: () => void
+}
+
+export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLElement>(null)
@@ -145,6 +151,7 @@ export default function App(): React.JSX.Element {
   const loginRef = useRef<string | null>(null)
 
   const [input, setInput] = useState('')
+  const [profileLogin, setProfileLogin] = useState<string | null>(null)
   /** Mirrors loginRef for rendering; a ref alone would not trigger an update. */
   const [channel, setChannel] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
@@ -306,6 +313,7 @@ export default function App(): React.JSX.Element {
   )
 
   const start = useCallback(async (raw: string): Promise<void> => {
+    setProfileLogin(null)
     const target = parseWatchInput(raw)
     if (!target) {
       setPhase({
@@ -498,6 +506,7 @@ export default function App(): React.JSX.Element {
    * let go, so nothing is downloading until you pick another channel.
    */
   const stop = useCallback((): void => {
+    setProfileLogin(null)
     // Clearing the ref also makes any in-flight resolve discard itself.
     targetRef.current = null
     vodRef.current = false
@@ -615,6 +624,15 @@ export default function App(): React.JSX.Element {
       listRef.current = null
     }
   }, [refresh])
+
+  // Only the mobile home supplies an initial selection. Mount the player first,
+  // then resolve it; invalidate pending requests when returning home.
+  useEffect(() => {
+    if (!initialWatch) return
+    setInput(initialWatch)
+    void start(initialWatch)
+    return () => { targetRef.current = null }
+  }, [initialWatch, start])
 
   // video element -> react state
   useEffect(() => {
@@ -808,6 +826,17 @@ export default function App(): React.JSX.Element {
   // --------------------------------------------------------------- view
 
   const stream = phase.kind === 'playing' ? phase.stream : null
+  const updateProfileFavourites = (items: string[]): void => {
+    setFavourites(items)
+    void refreshSummaries(items)
+  }
+  const browse = (raw: string): void => {
+    const target = parseWatchInput(raw)
+    if (!target || target.kind === 'vod') { void start(raw); return }
+    stop()
+    setInput(target.login)
+    setProfileLogin(target.login)
+  }
 
   // Rows come from the saved list, not from the lookup. Otherwise a slow or
   // failed first poll shows "nothing here yet" over a list that is on disk.
@@ -820,9 +849,12 @@ export default function App(): React.JSX.Element {
 
   return (
     <div
-      className={`app ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed || !chatVisible ? 'chat-collapsed' : ''}`}
+      className={`app ${profileLogin ? 'is-browsing' : ''} ${railVisible ? '' : 'rail-hidden'} ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed || !chatVisible ? 'chat-collapsed' : ''}`}
     >
       <header className="titlebar glass-panel">
+        {onHome && <button className="mobile-back" aria-label="Back to home" onClick={() => { stop(); onHome() }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14" /></svg>
+        </button>}
         <div className="wordmark">
           <span className="dot" />
           Slipstream
@@ -832,7 +864,7 @@ export default function App(): React.JSX.Element {
           className="channel-form"
           onSubmit={(e) => {
             e.preventDefault()
-            void start(input)
+            browse(input)
           }}
         >
           <input
@@ -863,12 +895,15 @@ export default function App(): React.JSX.Element {
         current={channel}
         collapsed={railCollapsed}
         onToggleCollapsed={toggleRailCollapsed}
-        onPick={(login) => void start(login)}
+        onPick={browse}
         onRemove={(login) => void mutateFavourites(window.slipstream.favourites.remove, login)}
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
       <main className={`stage glass-frame${fullscreenControlsHidden ? ' controls-hidden' : ''}`} ref={stageRef}>
+        {profileLogin && <div className="channel-profile-scroll"><ChannelProfile key={profileLogin} login={profileLogin}
+          favourites={favourites} onFavouritesChange={updateProfileFavourites}
+          onWatchLive={() => void start(profileLogin)} onPickVod={(id) => void start(`videos/${id}`)} /></div>}
         {stream && (
           <header className="now-playing">
             {stream.kind === 'vod' ? (
@@ -905,6 +940,8 @@ export default function App(): React.JSX.Element {
               onRetry={channel ? () => void start(channel) : undefined}
               login={channel ?? undefined}
               onPickVod={(id) => void start(`videos/${id}`)}
+              favourites={favourites}
+              onFavouritesChange={updateProfileFavourites}
             />
           )}
           {hudVisible && <MemoryHud />}

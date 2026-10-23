@@ -184,6 +184,8 @@ export interface VodChatPage {
 export interface VodSummary {
   id: string
   title: string
+  thumbnail: string | null
+  game: string | null
   /** Seconds. */
   length: number
   /** Epoch ms of the original broadcast. */

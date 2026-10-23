@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ResolveFailure } from '@shared/types'
 import { Alert, Satellite } from './Icons'
-import { VodList } from './VodList'
+import { ChannelProfile } from './ChannelProfile'
 
 interface Props {
   kind: 'idle' | 'resolving' | 'error'
@@ -13,6 +13,8 @@ interface Props {
   /** Offline is not a dead end while the channel still has VODs. */
   login?: string
   onPickVod?: (id: string) => void
+  favourites?: string[]
+  onFavouritesChange?: (items: string[]) => void
 }
 
 /** Measured: the direct ask takes 1-4s on a live channel; the streamlink fallback about 8s. */
@@ -51,6 +53,11 @@ export function Placeholder(props: Props): React.JSX.Element {
     return <Resolving channel={props.channel} onCancel={props.onCancel} />
 
   if (props.kind === 'error') {
+    if (props.reason === 'offline' && props.login && props.onPickVod && props.favourites && props.onFavouritesChange) {
+      return <div className="channel-profile-scroll channel-profile-overlay"><ChannelProfile key={props.login} login={props.login}
+        favourites={props.favourites} onFavouritesChange={props.onFavouritesChange}
+        onWatchLive={() => props.onRetry?.()} onPickVod={props.onPickVod} /></div>
+    }
     return (
       <div className="placeholder is-error">
         <div className="glyph">
@@ -68,9 +75,6 @@ export function Placeholder(props: Props): React.JSX.Element {
           <p>
             <code>winget install --id Streamlink.Streamlink --source winget</code>
           </p>
-        )}
-        {props.reason === 'offline' && props.login && props.onPickVod && (
-          <VodList login={props.login} onPick={props.onPickVod} />
         )}
 
         {props.onRetry && (
