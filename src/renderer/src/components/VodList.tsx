@@ -8,8 +8,9 @@ interface Props {
 
 function length(seconds: number): string {
   const h = Math.floor(seconds / 3600)
-  const m = Math.round((seconds % 3600) / 60)
-  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = String(Math.floor(seconds % 60)).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
 }
 
 function ago(ms: number): string {
@@ -23,13 +24,7 @@ function ago(ms: number): string {
 
 type State = { kind: 'loading' } | { kind: 'ready'; rows: VodSummary[] } | { kind: 'failed' }
 
-/**
- * What you can watch, on the screen that just told you that you cannot.
- *
- * "Not live" used to be a dead end with a Try again button, which sent you to
- * the Twitch website to find a video id and paste it back - the exact errand
- * this app exists to save. One GQL call already knows the answer.
- */
+/** A channel's broadcasts and newer highlights, with shared cards on both layouts. */
 export function VodList({ login, onPick }: Props): React.JSX.Element {
   const [state, setState] = useState<State>({ kind: 'loading' })
 
@@ -55,7 +50,7 @@ export function VodList({ login, onPick }: Props): React.JSX.Element {
   if (state.kind === 'failed')
     return <p className="vods-note">Could not ask Twitch about past broadcasts.</p>
   if (!state.rows.length)
-    return <p className="vods-note">No past broadcasts listed either.</p>
+    return <div className="vods"><h2 className="vods-head">Past broadcasts</h2><p className="vods-note">No past broadcasts available.</p></div>
 
   const archives = state.rows.filter((v) => v.kind === 'archive')
   const highlights = state.rows.filter((v) => v.kind === 'highlight')
@@ -72,12 +67,16 @@ export function VodList({ login, onPick }: Props): React.JSX.Element {
           disabled={v.restricted}
           title={v.restricted ? `${v.title} - subscribers only` : v.title}
         >
-          <span className="vod-title">{v.title || 'Untitled broadcast'}</span>
-          <span className="vod-meta">
+          <span className="vod-thumbnail">
+            <span className="vod-thumbnail-fallback" aria-hidden="true">▶</span>
+            {v.thumbnail && <img src={v.thumbnail} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none' }} />}
             <span className="vod-len">{length(v.length)}</span>
-            <span>{ago(v.createdAt)}</span>
-            {v.restricted && <span className="vod-sub">subs only</span>}
+            <span className="vod-views">{new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(v.views)} views</span>
+            <span className="vod-date">{ago(v.createdAt)}</span>
           </span>
+          <span className="vod-title">{v.title || 'Untitled broadcast'}</span>
+          {v.game && <span className="vod-game">{v.game}</span>}
+          {v.restricted && <span className="vod-sub">Subscribers only</span>}
         </button>
       ))}
     </div>
@@ -91,17 +90,15 @@ export function VodList({ login, onPick }: Props): React.JSX.Element {
           never be mistaken for the broadcast it was cut from. */}
       {highlights.length > 0 && (
         <>
-          <p className="vods-head">
+          <h2 className="vods-head">
             {archives.length > 0 ? 'Newer highlights' : 'Highlights'}
-          </p>
+          </h2>
           {rows(highlights)}
         </>
       )}
       {archives.length > 0 && (
         <>
-          <p className="vods-head">
-            {highlights.length > 0 ? 'Past broadcasts' : 'Watch a past broadcast'}
-          </p>
+          <h2 className="vods-head">Past broadcasts</h2>
           {rows(archives)}
         </>
       )}

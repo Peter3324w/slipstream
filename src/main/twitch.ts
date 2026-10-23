@@ -58,6 +58,8 @@ export async function lookupChannel(login: string): Promise<ChannelLookup> {
 interface VideoNode {
   id?: string
   title?: string
+  previewThumbnailURL?: string
+  game?: { displayName?: string } | null
   lengthSeconds?: number
   createdAt?: string
   viewCount?: number
@@ -77,6 +79,8 @@ function toSummaries(conn: VideoConnection | null | undefined, kind: VodSummary[
     out.push({
       id: n.id,
       title: n.title ?? '',
+      thumbnail: n.previewThumbnailURL || null,
+      game: n.game?.displayName || null,
       length: n.lengthSeconds ?? 0,
       createdAt: Number.isNaN(created) ? 0 : created,
       views: n.viewCount ?? 0,
@@ -120,10 +124,10 @@ export async function channelVods(login: string, first = 8): Promise<VodSummary[
         query: `query Vods($login: String!, $first: Int!) {
   user(login: $login) {
     archive: videos(first: $first, sort: TIME, type: ARCHIVE) {
-      edges { node { id title lengthSeconds createdAt viewCount self { isRestricted } } }
+      edges { node { id title previewThumbnailURL(width: 640, height: 360) game { displayName } lengthSeconds createdAt viewCount self { isRestricted } } }
     }
     highlight: videos(first: $first, sort: TIME, type: HIGHLIGHT) {
-      edges { node { id title lengthSeconds createdAt viewCount self { isRestricted } } }
+      edges { node { id title previewThumbnailURL(width: 640, height: 360) game { displayName } lengthSeconds createdAt viewCount self { isRestricted } } }
     }
   }
 }`,

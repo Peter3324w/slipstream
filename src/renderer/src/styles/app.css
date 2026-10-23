@@ -293,67 +293,43 @@ input { font: inherit; color: inherit; }
 }
 .placeholder.is-error .glyph { background: rgb(var(--danger-rgb) / 0.12); color: var(--danger); }
 
-/* Past broadcasts, offered on the "not live" screen. */
-.vods-note { font-size: 12px; color: var(--muted) !important; }
-.vods { width: min(460px, 100%); display: flex; flex-direction: column; gap: 8px; }
-.vods-head {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted) !important;
-}
-.vods-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  /* Eight is a lot of rows on a short window; let the rest scroll rather than
-     pushing Try again off the bottom. */
-  max-height: 260px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-.vod-row {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  width: 100%;
-  padding: 8px 11px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--stroke-soft);
-  background: var(--surface);
-  text-align: left;
-  transition: background 0.12s, border-color 0.12s;
-}
-.vod-row:hover:not(:disabled) { background: var(--card); border-color: var(--stroke); }
-.vod-row:disabled { opacity: 0.5; cursor: default; }
-.vod-title {
-  max-width: 100%;
-  font-size: 13px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.vod-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.vod-len { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.vod-sub {
-  padding: 0 5px;
-  border-radius: 99px;
-  border: 1px solid var(--stroke);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+/* Shared channel profile and responsive broadcast grid. */
+.channel-profile-scroll { flex: 1; min-height: 0; overflow-y: auto; background: var(--bg); padding: 28px; }
+.channel-profile-overlay { position: absolute; inset: 0; }
+.channel-profile { width: 100%; max-width: 1200px; margin: 0 auto; container-type: inline-size; }
+.channel-profile-header { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 8px 0 28px; }
+.channel-profile-avatar { display: grid; place-items: center; flex: none; width: 76px; height: 76px; border-radius: 50%; overflow: hidden; background: var(--card-2); color: var(--accent); font-size: 30px; font-weight: 700; }
+.channel-profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.channel-profile-identity { flex: 1; min-width: 0; }
+.channel-profile-identity h1 { margin: 0 0 6px; font-size: clamp(22px, 4cqi, 32px); letter-spacing: -0.7px; overflow-wrap: anywhere; }
+.channel-profile-identity p { margin: 0; color: var(--muted); font-size: 14px; }
+.channel-watch-live { flex: none; background: var(--accent); color: var(--on-accent); }
+.channel-profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.channel-favourite[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
+.channel-profile-error { color: var(--danger); font-size: 13px; margin: 0 0 16px; }
+.app.is-browsing > .chat, .app.is-browsing .stage > .video-wrap, .app.is-browsing .stage > .controls { display: none; }
+.app.is-browsing > .stage { grid-column: 2 / -1; }
+.app.is-browsing.rail-hidden > .stage { grid-column: 1 / -1; }
+.vods-note { font-size: 14px; color: var(--muted); }
+.vods { width: 100%; display: flex; flex-direction: column; gap: 20px; }
+.vods-head { margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--stroke); font-size: 18px; font-weight: 650; letter-spacing: normal; text-transform: none; color: var(--text) !important; }
+.vods-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 14px; max-height: none; overflow: visible; padding: 0; }
+.vod-row { display: flex; flex-direction: column; text-align: left; align-items: stretch; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; border-radius: 8px; }
+.vod-row:disabled { opacity: 0.6; cursor: default; }
+.vod-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.vod-thumbnail { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--card-2); margin-bottom: 4px; }
+.vod-thumbnail-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 24px; }
+.vod-thumbnail img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vod-len, .vod-views, .vod-date { position: absolute; padding: 2px 4px; border-radius: 3px; background: rgb(0 0 0 / 80%); color: #fff; font-size: clamp(10px, 2.8cqi, 12px); line-height: 1.3; font-variant-numeric: tabular-nums; }
+.vod-len { top: 6px; left: 6px; }
+.vod-views { bottom: 6px; left: 6px; }
+.vod-date { bottom: 6px; right: 6px; }
+.vod-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: normal; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.vod-game { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vod-sub { align-self: flex-start; font-size: 11px; }
+@media (hover: hover) and (pointer: fine) { .vod-row:hover:not(:disabled) .vod-title { color: var(--accent); } }
+@container (min-width: 740px) { .vods-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 20px; } }
+@container (min-width: 1040px) { .vods-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .spinner {
   width: 26px; height: 26px; border-radius: 99px;
