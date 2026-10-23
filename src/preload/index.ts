@@ -69,6 +69,9 @@ const api = {
   memory: (): Promise<MemorySample[]> => ipcRenderer.invoke('app:memory')
 }
 
-export type SlipstreamApi = typeof api
+// The mobile bridge implements playback/chat but has no desktop window chrome.
+export type SlipstreamApi = Omit<typeof api, 'windowControls'> & {
+  windowControls?: typeof api.windowControls
+}
 
 contextBridge.exposeInMainWorld('slipstream', api)

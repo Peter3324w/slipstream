@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-export function WindowControls(): React.JSX.Element {
+export function WindowControls(): React.JSX.Element | null {
   const [maximized, setMaximized] = useState(false)
   const controls = window.slipstream?.windowControls
 
@@ -16,6 +16,8 @@ export function WindowControls(): React.JSX.Element {
       unsubscribe()
     }
   }, [controls])
+
+  if (!controls) return null
 
   return (
     <div className="window-controls" role="group" aria-label="Window controls">
