@@ -110,9 +110,9 @@ export function ChatMenu(props: Props): React.JSX.Element {
             <span>{props.favourite ? 'Remove channel from favourites' : 'Add channel to favourites'}</span>
           </button>
         )}
-        <button className="chat-option" role="switch" aria-label="Show favourites" aria-checked={props.railVisible} onClick={props.onRail}>
+        <button className="chat-option" role="switch" aria-label="Show favourites" aria-keyshortcuts="B" aria-checked={props.railVisible} onClick={props.onRail}>
           <span className="chat-option-icon" aria-hidden="true"><Rail /></span>
-          <span>Show favourites</span><span className="chat-option-state">{props.railVisible ? 'On' : 'Off'}</span>
+          <span>Show favourites (B)</span><span className="chat-option-state">{props.railVisible ? 'On' : 'Off'}</span>
         </button>
         {props.showSignIn && (
           <button className="chat-option" disabled={!props.canSignIn} onClick={() => action(props.onSignIn)}>
