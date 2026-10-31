@@ -5,6 +5,8 @@ import App from '../renderer/src/App'
 import { ChevronRight, Palette, Play, Star } from '../renderer/src/components/Icons'
 import { ThemePicker } from '../renderer/src/components/ThemePicker'
 import { ChannelProfile } from '../renderer/src/components/ChannelProfile'
+import { displayBridge, FULLSCREEN_EVENT } from '../renderer/src/player/display'
+import { useOrientation } from './useOrientation'
 
 type Tab = 'home' | 'favourites' | 'appearance'
 const SEARCH_USED_KEY = 'slipstream.mobileSearchUsed'
@@ -33,6 +35,25 @@ export function MobileApp(): React.JSX.Element {
     try { return localStorage.getItem(SEARCH_USED_KEY) === '1' } catch { return false }
   })
   const search = useRef<HTMLInputElement>(null)
+  const orientation = useOrientation()
+  const [playerFullscreen, setPlayerFullscreen] = useState(false)
+
+  useEffect(() => {
+    const onFullscreen = (event: Event): void => {
+      setPlayerFullscreen(Boolean((event as CustomEvent<boolean>).detail))
+    }
+    window.addEventListener(FULLSCREEN_EVENT, onFullscreen)
+    return () => window.removeEventListener(FULLSCREEN_EVENT, onFullscreen)
+  }, [])
+
+  // Leaving the player must also give the phone its bars and rotation back.
+  useEffect(() => {
+    if (watch) return
+    const bridge = displayBridge()
+    void bridge?.setImmersive(false)
+    void bridge?.setOrientation('unspecified')
+    setPlayerFullscreen(false)
+  }, [watch])
 
   useEffect(() => {
     if (watch) return
@@ -65,7 +86,7 @@ export function MobileApp(): React.JSX.Element {
     else { setProfileLogin(target.login); setTab('home') }
   }
 
-  if (watch) return <div className="mobile-player">
+  if (watch) return <div className={`mobile-player${playerFullscreen ? ' is-fullscreen' : ''}`} data-orientation={orientation}>
     <App initialWatch={watch} onHome={() => { setWatch(null); setTab('home') }} />
   </div>
 
@@ -86,7 +107,7 @@ export function MobileApp(): React.JSX.Element {
   </ul>
 
   return (
-    <div className={`mobile-shell${profileLogin && tab === 'home' ? ' has-profile' : ''}`}>
+    <div className={`mobile-shell${profileLogin && tab === 'home' ? ' has-profile' : ''}`} data-orientation={orientation}>
       <header className="mobile-header">
         <div className="mobile-brand"><span className="mobile-brand-mark" aria-hidden="true"><Play size={17} /></span>Slipstream</div>
         {headerSearch && tab === 'home' ? searchForm(true) : <button className="mobile-icon-button" aria-label="Search for a stream" onClick={focusSearch}><SearchIcon /></button>}

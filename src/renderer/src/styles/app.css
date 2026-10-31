@@ -1370,6 +1370,7 @@ input { font: inherit; color: inherit; }
   left: 0;
   right: 0;
   z-index: 25;
+  transition: opacity 0.22s var(--ease);
 }
 .stage:fullscreen.controls-hidden .controls {
   opacity: 0;
