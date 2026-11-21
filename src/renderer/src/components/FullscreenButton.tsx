@@ -1,4 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react'
+import { announceFullscreen, displayBridge } from '../player/display'
 
 interface Props {
   target: RefObject<HTMLElement | null>
@@ -26,6 +27,22 @@ export function FullscreenButton({ target }: Props): React.JSX.Element {
   const toggleFullscreen = async (): Promise<void> => {
     setFullscreenPending(true)
     try {
+      // Android: the WebView cannot do element fullscreen, so the activity
+      // turns the phone and hides the system bars instead.
+      const bridge = displayBridge()
+      if (bridge) {
+        const next = !fullscreen
+        if (next) {
+          await bridge.setOrientation('landscape')
+          await bridge.setImmersive(true)
+        } else {
+          await bridge.setImmersive(false)
+          await bridge.setOrientation('unspecified')
+        }
+        setFullscreen(next)
+        announceFullscreen(next)
+        return
+      }
       if (document.fullscreenElement) await document.exitFullscreen()
       else await target.current?.requestFullscreen()
     } catch (error) {

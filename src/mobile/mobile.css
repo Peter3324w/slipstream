@@ -7,40 +7,6 @@
 /* No window to drag, and nothing for the drag regions to do. */
 .titlebar, .titlebar > *, .wordmark { -webkit-app-region: none; }
 
-@media (orientation: portrait) {
-  .app {
-    grid-template-rows: auto auto 1fr;
-    grid-template-columns: auto 1fr;
-    grid-template-areas:
-      "titlebar titlebar"
-      "stage stage"
-      "rail chat";
-  }
-
-  .titlebar { display: flex; flex-wrap: wrap; height: auto; row-gap: 6px; padding: 8px 12px; }
-  .channel-form { flex: 1; min-width: 0; }
-  .channel-input { flex: 1; width: auto; min-width: 0; }
-  .now-playing { order: 10; flex-basis: 100%; }
-
-  .stage { aspect-ratio: 16 / 9; width: 100%; }
-
-  /* The favourites strip sits beside chat, so collapsed is the better default
-     than 212px; expanding it still works, chat just narrows. */
-  .app .chat { width: auto; border-left: 1px solid var(--stroke-soft); }
-  .app.rail-hidden .chat { border-left: 0; }
-}
-
-/* A phone on its side: the video is the point. Chat stays, narrow and hideable. */
-@media (orientation: landscape) and (max-height: 520px) {
-  .app {
-    grid-template-rows: 1fr;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "stage chat";
-  }
-  .titlebar, .rail { display: none; }
-  .app .chat { width: min(32vw, 300px); }
-}
-
 /* Mobile has its own home and navigation, rather than a scaled desktop shell. */
 .mobile-shell {
   height: 100%;
@@ -127,32 +93,139 @@
 .mobile-player .app.is-browsing > .stage { grid-column: 1; aspect-ratio: auto; }
 .mobile-player .channel-profile-scroll { padding: 16px; }
 
-/* Share playback behaviour, but keep navigation and sizing native to a phone. */
-.mobile-player { height: 100%; }
+/* ------------------------------------------------------------------ player */
+
+/*
+ * One layout decision, taken once by useOrientation, and two complete layouts
+ * hung off it. Nothing here is keyed on a viewport height: a max-height
+ * breakpoint was what left the portrait video slab inside a landscape frame,
+ * which is a layout taller than the screen and therefore a clipped screen.
+ */
+
+.mobile-player { position: relative; height: 100%; min-height: 0; }
+
 .mobile-player .app {
-  padding-top: max(8px, env(safe-area-inset-top));
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  gap: 8px;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas: "titlebar" "stage" "chat";
 }
-.mobile-player .rail, .mobile-player .wordmark { display: none; }
+
+/* The rail is a desktop idea, and these buttons only do something in a desktop
+   window. On a phone they are dead controls pretending the PC app is here. */
+.mobile-player .rail,
+.mobile-player .wordmark,
+.mobile-player .window-controls { display: none; }
+
 .mobile-player .titlebar { display: flex; gap: 6px; padding: 4px 8px; border-radius: 18px; }
-.mobile-back { display: grid; place-items: center; flex: none; width: 44px; height: 44px; }
-.mobile-player .stage:not(:fullscreen) { aspect-ratio: auto; }
-.mobile-player .stage:not(:fullscreen) .video-wrap { flex: none; aspect-ratio: 16 / 9; }
+.mobile-back {
+  display: grid; place-items: center; flex: none;
+  width: 44px; height: 44px; border-radius: 50%;
+}
 .mobile-player .chat { width: auto; min-height: 0; }
 .mobile-player .placeholder { overflow-y: auto; place-content: start center; padding: 16px; gap: 10px; }
 .mobile-player .placeholder .glyph { display: none; }
 
-@media (orientation: landscape) and (max-height: 520px) {
-  .mobile-search-area { padding-top: 16px; }
-  .mobile-hero-mark { display: none; }
-  .mobile-player .app {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas: "titlebar titlebar" "stage chat";
-  }
-  .mobile-player .chat { width: min(32vw, 300px); }
-  .mobile-player .stage:not(:fullscreen) .video-wrap { flex: 1; aspect-ratio: auto; }
+/* Portrait: a 16:9 slab of video, chat owns exactly the rest. */
+.mobile-player[data-orientation='portrait'] .stage:not(:fullscreen) { aspect-ratio: auto; }
+.mobile-player[data-orientation='portrait'] .stage:not(:fullscreen) .video-wrap {
+  flex: none;
+  aspect-ratio: 16 / 9;
 }
+
+/* Landscape: the video is the screen, and chat is a guest docked on the right.
+   Docked, not overlaid - the stage gives up the width, so the picture is never
+   underneath chat and never squashed by it. */
+.mobile-player[data-orientation='landscape'] .app {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "stage chat";
+}
+
+/* The only chrome left is a back button floating over the picture. */
+.mobile-player[data-orientation='landscape'] .titlebar {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  right: auto;
+  z-index: 30;
+  display: flex;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.mobile-player[data-orientation='landscape'] .channel-form,
+.mobile-player[data-orientation='landscape'] .titlebar-actions,
+.mobile-player[data-orientation='landscape'] .now-playing { display: none; }
+.mobile-player[data-orientation='landscape'] .mobile-back {
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+.mobile-player[data-orientation='landscape'] .stage:not(:fullscreen) {
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 14px;
+}
+.mobile-player[data-orientation='landscape'] .stage:not(:fullscreen) .video-wrap {
+  flex: 1;
+  aspect-ratio: auto;
+}
+
+/* 30% of the long edge, which is the default Xtra persists. Collapsed chat
+   shrinks to its strip and the stage takes the space back by itself. */
+.mobile-player[data-orientation='landscape'] .chat { width: clamp(200px, 30vw, 360px); }
+.mobile-player[data-orientation='landscape'] .app.chat-collapsed .chat { width: var(--strip-w); }
+
+/* A channel profile is not a stream: no chat to dock, so the page gets the lot. */
+.mobile-player[data-orientation='landscape'] .app.is-browsing {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stage";
+}
+
+/* Native fullscreen (Android): the stage is the window, everything else gone. */
+.mobile-player.is-fullscreen .app {
+  padding: 0;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "stage";
+}
+.mobile-player.is-fullscreen .titlebar,
+.mobile-player.is-fullscreen .now-playing,
+.mobile-player.is-fullscreen .chat { display: none; }
+.mobile-player.is-fullscreen .stage:not(:fullscreen),
+.mobile-player.is-fullscreen .stage:not(:fullscreen) .video-wrap {
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+}
+.mobile-player.is-fullscreen .stage:not(:fullscreen) .video-wrap { flex: 1; }
+
+/* Float the bar over the picture in fullscreen, so hiding it hands the space
+   back to the video instead of leaving a dead strip under it. */
+.mobile-player.is-fullscreen .stage .controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  transition: opacity 0.22s var(--ease);
+}
+.mobile-player.is-fullscreen .stage.controls-hidden .controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The shell itself on its side: the home content is a scroller, so it only
+   needs the hero to stop eating the short viewport. */
+.mobile-shell[data-orientation='landscape'] .mobile-search-area { padding-top: 16px; }
+.mobile-shell[data-orientation='landscape'] .mobile-hero-mark { display: none; }
