@@ -51,6 +51,31 @@ function namesByGroup(master: string): Map<string, string> {
   return out
 }
 
+/** Stable Twitch rendition identity; signed URLs and playlist order can change. */
+function renditionKey(attrs: Record<string, string>): string {
+  return JSON.stringify(['VIDEO', 'CODECS', 'RESOLUTION', 'FRAME-RATE'].map((key) => attrs[key] ?? ''))
+}
+
+function renditionUrls(master: string): Map<string, string> {
+  const urls = new Map<string, string>()
+  let attrs: Record<string, string> | null = null
+  for (const raw of master.split('\n')) {
+    const line = raw.trim()
+    if (line.startsWith('#EXT-X-STREAM-INF:')) {
+      attrs = {}
+      // Quoted CODECS values contain commas, so splitting on commas is unsafe.
+      for (const match of line.slice(line.indexOf(':') + 1).matchAll(/([\w-]+)=(?:"([^"]*)"|([^,]*))/g)) {
+        attrs[match[1]] = match[2] ?? match[3]
+      }
+    } else if (attrs && line && !line.startsWith('#')) {
+      // Twitch's resolved master contains absolute HTTPS rendition URLs.
+      if (attrs.VIDEO && /^https:\/\//i.test(line)) urls.set(renditionKey(attrs), line)
+      attrs = null
+    }
+  }
+  return urls
+}
+
 export class Player {
   private hls: Hls | null = null
   private objectUrl: string | null = null
@@ -144,6 +169,33 @@ export class Player {
   /** -1 restores automatic bitrate selection. */
   setLevel(index: number): void {
     if (this.hls) this.hls.currentLevel = index
+  }
+
+  /** Renew signed live URLs without detaching MSE or throwing away the DVR. */
+  renewLiveUrls(masterPlaylist: string): boolean {
+    const hls = this.hls
+    if (!hls?.levels.length) return false
+    const urls = renditionUrls(masterPlaylist)
+    const replacements = hls.levels.map((level) => urls.get(renditionKey(level.attrs)))
+    // Validate every rendition first: never leave ABR using a mix of old and new tokens.
+    if (replacements.some((url) => !url)) return false
+
+    hls.stopLoad()
+    hls.levels.forEach((level, index) => {
+      level.url[0] = replacements[index]!
+      // Renew immediately, even if the next regular playlist poll is not due.
+      if (level.details) level.details.requestScheduled = -1
+    })
+    this.staleReported = false
+    this.networkFailures = 0
+    // Keep the existing level details (segment timeline), SourceBuffers and pause state.
+    // startLoad enables buffering before requesting the playlist. Pause at that
+    // request so its immediate tick cannot download an expired fragment from
+    // the retained details; LEVEL_UPDATED means fresh details have been merged.
+    hls.once(Hls.Events.LEVEL_LOADING, () => hls.pauseBuffering())
+    hls.once(Hls.Events.LEVEL_UPDATED, () => hls.resumeBuffering())
+    hls.startLoad(this.video.currentTime, true)
+    return true
   }
 
   get currentLevel(): number {

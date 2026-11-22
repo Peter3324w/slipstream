@@ -546,11 +546,17 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     }
     if (targetRef.current !== target) return
     if (result.ok) {
-      // A live stream rejoins at the edge; a VOD has to come back where it was,
-      // not at 0:00 of a fourteen hour broadcast.
-      const resumeAt = target.kind === 'vod' ? (videoRef.current?.currentTime ?? 0) : undefined
+      if (target.kind === 'channel') {
+        // Recreating the player erases the DVR and forces anyone watching behind
+        // back to live. Swap only the signed URLs, retaining the buffered timeline.
+        if (!playerRef.current?.renewLiveUrls(result.stream.masterPlaylist)) {
+          setPhase({ kind: 'error', reason: 'error', message: 'The stream qualities changed while renewing playback. Reopen the channel to continue.' })
+          return
+        }
+      } else {
+        playerRef.current?.load(result.stream.masterPlaylist, videoRef.current?.currentTime ?? 0)
+      }
       setPhase({ kind: 'playing', stream: result.stream })
-      playerRef.current?.load(result.stream.masterPlaylist, resumeAt)
     } else {
       setPhase({ kind: 'error', reason: result.reason, message: result.message })
     }
