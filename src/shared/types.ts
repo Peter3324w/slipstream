@@ -79,6 +79,25 @@ export type ResolveResult =
   | { ok: true; stream: ResolvedStream }
   | { ok: false; reason: ResolveFailure; message: string }
 
+/** A session-only disk recording; its URLs stop working after Stop or app exit. */
+export interface DvrStartResult {
+  masterPlaylist: string
+  startAt: number
+}
+
+export interface DvrStatus {
+  active: boolean
+  bytes: number
+  error: string | null
+}
+
+export interface DvrApi {
+  start: (rendition: string, programDateTime: number) => Promise<DvrStartResult>
+  status: () => Promise<DvrStatus>
+  position: (mediaSeconds: number) => Promise<void>
+  stop: () => Promise<void>
+}
+
 export interface AppInfo {
   version: string
   electron: string

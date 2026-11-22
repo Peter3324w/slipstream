@@ -1,6 +1,7 @@
 import type { Storyboard } from '@shared/types'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { QualityLevel } from '@/player/hls'
+import type { RecordingState } from '@/player/pauseRecording'
 import { Layers, Pause, Play, Stop, Volume, VolumeOff } from './Icons'
 import { DvrBar } from './DvrBar'
 import { FullscreenButton } from './FullscreenButton'
@@ -32,6 +33,7 @@ interface Props {
   pinnedLabel: string | null
   /** What hls.js is actually playing right now, which ABR may keep changing. */
   activeLevel: number
+  recording?: RecordingState
   onPick: (label: string | null) => void
 }
 
@@ -53,7 +55,8 @@ export function Controls(props: Props): React.JSX.Element {
 
   // Auto has to say what it actually picked, or it looks like the control is
   // being ignored: the label would read "720p60" while ABR quietly moved you.
-  const qualityLabel = props.pinnedLabel ?? (active ? `Auto · ${active.label}` : 'Auto')
+  const fixed = props.recording?.kind === 'recording'
+  const qualityLabel = fixed ? `${active?.label ?? props.levels[0]?.label ?? 'Quality'} · Fixed` : props.pinnedLabel ?? (active ? `Auto · ${active.label}` : 'Auto')
 
   return (
     <div className="controls glass-panel">
@@ -96,6 +99,7 @@ export function Controls(props: Props): React.JSX.Element {
         storyboard={props.storyboard}
         onSeek={props.onSeekTo}
         onJumpLive={props.onJumpLive}
+        recording={!!props.recording && props.recording.kind !== 'idle'}
       />
 
 
@@ -116,17 +120,23 @@ export function Controls(props: Props): React.JSX.Element {
 
       <FullscreenButton target={props.fullscreenTarget} />
 
+      {props.recording && props.recording.kind !== 'idle' && (
+        <span role="status" title="Saved temporarily on this device and deleted when you stop or close Slipstream. Jump Live restores quality choices." style={{ fontSize: 11, maxWidth: 240 }}>
+          {props.recording.error || (props.recording.kind === 'preparing' ? 'Preparing temporary recording…' : 'Temporary recording')}
+        </span>
+      )}
+
       <div className="menu-anchor" ref={anchor}>
         <button
           className={`ctl ${props.pinnedLabel ? 'is-pinned' : ''}`}
           onClick={() => setMenu((v) => !v)}
-          disabled={!props.levels.length}
+          disabled={!props.levels.length || fixed || props.recording?.kind === 'preparing'}
           title="Quality"
         >
           <Layers />
           {qualityLabel}
         </button>
-        {menu && (
+        {menu && !fixed && (
           <div className="menu" role="menu">
             <button
               className={`menu-item ${props.pinnedLabel === null ? 'is-active' : ''}`}

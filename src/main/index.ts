@@ -5,6 +5,8 @@ import type {
   AppInfo,
   AuthStatus,
   ChannelSummary,
+  DvrStartResult,
+  DvrStatus,
   EmoteProvider,
   EmoteSet,
   MemorySample,
@@ -19,6 +21,7 @@ import { clearVodAccess, vodRequestAllowed } from './vod-access'
 import { contentSecurityPolicy, VOD_CDN } from './csp'
 import { fetchEmotes, setEmoteCacheDir } from './emotes'
 import { channelSummaries, channelVods, vodComments } from './twitch'
+import { TemporaryDvr } from './dvr'
 import { addFavourite, listFavourites, removeFavourite, setFavouritesDir } from './favourites'
 import {
   accessToken,
@@ -34,6 +37,10 @@ import {
 
 const __dirname_ = fileURLToPath(new URL('.', import.meta.url))
 const isDev = !app.isPackaged
+let recorder: TemporaryDvr | null = null
+let recorderInitializationError: string | null = null
+let currentLive: { login: string; masterPlaylist: string } | null = null
+let resolveVersion = 0
 
 /**
  * Windows groups taskbar buttons and attributes notifications by this id. Without
@@ -142,7 +149,7 @@ function applyResponseHeaders(): void {
       headers['Access-Control-Allow-Origin'] = ['*']
     }
 
-    if (!isDev) headers['Content-Security-Policy'] = [contentSecurityPolicy()]
+    if (!isDev) headers['Content-Security-Policy'] = [contentSecurityPolicy(recorder?.origin)]
 
     callback({ responseHeaders: headers })
   })
@@ -213,14 +220,47 @@ function registerIpc(): void {
 
     // A live channel needs no CDN grant, and leaving the last VOD's one in place
     // would outlive what asked for it.
+    const version = ++resolveVersion
+    if (target.kind !== 'channel' || currentLive?.login !== target.login) {
+      currentLive = null
+      await recorder?.stop()
+    }
+    if (version !== resolveVersion) {
+      return { ok: false, reason: 'error', message: 'Playback changed while resolving the stream.' }
+    }
     if (target.kind === 'channel') {
       clearVodAccess()
-      return resolveChannel(target.login)
+      const result = await resolveChannel(target.login)
+      if (version === resolveVersion && result.ok) {
+        currentLive = { login: target.login, masterPlaylist: result.stream.masterPlaylist }
+      }
+      return result
     }
     return resolveVod(target.id)
   })
 
-  ipcMain.handle('stream:release', (): void => clearVodAccess())
+  ipcMain.handle('stream:release', async (): Promise<void> => {
+    ++resolveVersion
+    currentLive = null
+    clearVodAccess()
+    await recorder?.stop()
+  })
+
+  ipcMain.handle('dvr:start', async (_event, rendition: unknown, programDateTime: unknown): Promise<DvrStartResult> => {
+    if (recorderInitializationError) throw new Error(`Temporary recording is unavailable: ${recorderInitializationError}`)
+    if (!recorder || !currentLive || typeof rendition !== 'string' || rendition.length > 256 ||
+      typeof programDateTime !== 'number' || !Number.isFinite(programDateTime)) {
+      throw new Error('A live stream must be playing before it can be recorded.')
+    }
+    return recorder.start(currentLive.masterPlaylist, rendition, programDateTime)
+  })
+  ipcMain.handle('dvr:status', (): DvrStatus => recorderInitializationError
+    ? { active: false, bytes: 0, error: `Temporary recording is unavailable: ${recorderInitializationError}` }
+    : recorder?.status() ?? { active: false, bytes: 0, error: null })
+  ipcMain.handle('dvr:position', (_event, seconds: unknown): void => {
+    if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) recorder?.updatePosition(seconds)
+  })
+  ipcMain.handle('dvr:stop', (): Promise<void> | undefined => recorder?.stop())
 
   ipcMain.handle(
     'emotes:fetch',
@@ -300,6 +340,22 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
+    recorder = new TemporaryDvr(join(app.getPath('userData'), 'temporary-recording'), {
+      resolveMaster: async () => {
+        const live = currentLive
+        if (!live) throw new Error('The live channel is no longer selected.')
+        const result = await resolveChannel(live.login)
+        if (currentLive !== live || !result.ok) throw new Error('Could not renew the recording stream.')
+        currentLive = { login: live.login, masterPlaylist: result.stream.masterPlaylist }
+        return result.stream.masterPlaylist
+      }
+    })
+    try {
+      await recorder.initialize()
+    } catch (error) {
+      recorderInitializationError = error instanceof Error ? error.message : String(error)
+      console.error('Temporary recording is unavailable:', error)
+    }
     setEmoteCacheDir(app.getPath('userData'))
     setFavouritesDir(app.getPath('userData'))
 
@@ -330,5 +386,28 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()
+  })
+
+  let quitReady = false
+  let cleanup: Promise<void> | null = null
+  app.on('before-quit', (event) => {
+    if (quitReady || !recorder) return
+    event.preventDefault()
+    // A normal close waits until downloads and file readers have stopped and
+    // the recording is gone. Crash leftovers are removed by initialize().
+    cleanup ??= recorder.dispose().then(() => {
+      quitReady = true
+      app.quit()
+    }).catch((error: unknown) => {
+      cleanup = null
+      console.error('Could not delete the temporary recording:', error)
+      if (recorderInitializationError) {
+        // Recording never became available this run. Do not trap ordinary app
+        // exit on an inaccessible directory left by an earlier failed run.
+        quitReady = true
+        app.quit()
+      }
+      // Keep the app alive so a later close can retry cleanup.
+    })
   })
 }

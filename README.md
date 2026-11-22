@@ -156,9 +156,9 @@ and failing a 300MB target. Electron is also the stack PlayTime already holds ~1
 
 ### What Path A costs
 
-The back buffer lives in MSE SourceBuffers, in RAM, under a Chromium quota. `BACK_BUFFER_SECONDS`
-is 120 — roughly two minutes of rewind. Enough to scrub back over a teamfight. **Not** enough to
-sit out a three-minute ad break, which is exactly why Path B still matters.
+The browser back buffer lives in MSE SourceBuffers, in RAM, under a Chromium quota.
+`BACK_BUFFER_SECONDS` is 120 — roughly two minutes of ordinary rewind. Desktop long pauses now
+use the temporary disk recording described below, keeping that browser buffer small.
 
 ### Path B — mpv, embedded (deferred)
 
@@ -177,8 +177,35 @@ streamlink ... -o -   ->   mpv (--wid=<HWND> from getNativeWindowHandle())
 
 ## Rewind / DVR
 
-Worth its own section, because it solves a second problem for free. **Everything below describes
-Path B** — it is what a disk-backed buffer buys. Path A's rewind is the two minutes noted above.
+### Temporary pause recording (desktop)
+
+Pausing a live stream starts a temporary recording of the selected quality. Video continues
+downloading while paused; Resume plays the saved video from the paused frame, even after Twitch's
+live playlist moves past it. Browser buffering stays small. Segment timestamps are retained, but
+live chat still has its existing bounded history; this does not add a full long-pause chat replay.
+Quality stays fixed while watching the recording. **Jump Live** deletes the recording, resolves
+the current live stream again and restores quality choices.
+The saved timeline starts with the paused segment; it does not recover earlier live history.
+
+Recordings live only under the app's `userData/temporary-recording` directory. Stop, channel/VOD
+changes and normal app exit abort downloads, close file readers and delete them. Shutdown waits for
+deletion. Any leftovers from a crash or forced termination are removed on the next launch.
+
+The recording ceiling is **4 GiB**. Played segments more than two minutes behind the current
+playhead are deleted as recording continues. The paused frame and unplayed backlog are retained;
+if they fill the limit, recording stops with an explicit message and keeps the video already saved.
+Network gaps and disk failures also stop recording rather than silently joining separated footage
+or jumping live. Forty minutes at 6 Mbps is approximately 1.8 GB and continues using bandwidth
+throughout the pause.
+
+This path currently supports dated, muxed MPEG-TS live playlists. Encrypted segments, fMP4 maps,
+byte ranges and separate external tracks are rejected with an explanation. Android and VOD playback
+retain their existing behavior. If the paused frame has already disappeared from the remote playlist
+before recording starts, it cannot be recovered by this recording.
+
+### Earlier mpv DVR proposal (deferred)
+
+The following describes Path B rather than the temporary recording implementation above.
 
 `--demuxer-max-back-bytes` *is* the rewind buffer. Verified present in mpv `v0.41.0-244-gaf9c81fa1`:
 
@@ -264,6 +291,7 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 - [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
 - [x] DVR scrub bar across the rewind buffer, with jump-to-live
+- [x] Desktop temporary disk recording for long live pauses, deleted on stop and app exit
 - [x] **VOD playback** — see [VODs](#vods). Chat replay is the piece still missing
 - [ ] Configurable buffer length, and ad-skip — both gated on the seek probe below
 

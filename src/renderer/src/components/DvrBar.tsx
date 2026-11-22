@@ -17,6 +17,8 @@ interface Props {
   storyboard?: Storyboard | null
   onSeek: (time: number) => void
   onJumpLive: () => void
+  /** A local recording edge is never the remote live edge. */
+  recording?: boolean
 }
 
 function clock(seconds: number): string {
@@ -64,7 +66,8 @@ export function DvrBar({
   vod,
   storyboard,
   onSeek,
-  onJumpLive
+  onJumpLive,
+  recording = false
 }: Props): React.JSX.Element {
   const track = useRef<HTMLDivElement>(null)
   const [preview, setPreview] = useState<number | null>(null)
@@ -182,12 +185,12 @@ export function DvrBar({
         </span>
       ) : (
         <button
-          className={`dvr-time dvr-live ${behind < 5 ? 'is-live' : ''}`}
+          className={`dvr-time dvr-live ${!recording && behind < 5 ? 'is-live' : ''}`}
           onClick={onJumpLive}
-          disabled={disabled || behind < 5}
+          disabled={!recording && (disabled || behind < 5)}
           title="Jump to the live edge  (L)"
         >
-          {disabled ? '--:--' : behind < 5 ? 'LIVE' : `-${clock(behind)}`}
+          {recording ? 'Jump Live' : disabled ? '--:--' : behind < 5 ? 'LIVE' : `-${clock(behind)}`}
         </button>
       )}
     </div>
