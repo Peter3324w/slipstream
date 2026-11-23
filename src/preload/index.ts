@@ -3,6 +3,7 @@ import type {
   AppInfo,
   AuthStatus,
   ChannelSummary,
+  DvrApi,
   EmoteProvider,
   EmoteSet,
   MemorySample,
@@ -20,6 +21,12 @@ const api = {
   resolve: (input: string): Promise<ResolveResult> => ipcRenderer.invoke('stream:resolve', input),
   /** Playback stopped: drop the CORS grant a VOD needed (see main/vod-access.ts). */
   release: (): Promise<void> => ipcRenderer.invoke('stream:release'),
+  dvr: {
+    start: (rendition, programDateTime) => ipcRenderer.invoke('dvr:start', rendition, programDateTime),
+    status: () => ipcRenderer.invoke('dvr:status'),
+    position: (mediaSeconds) => ipcRenderer.invoke('dvr:position', mediaSeconds),
+    stop: () => ipcRenderer.invoke('dvr:stop')
+  } satisfies DvrApi,
   /** One window of a VOD's recorded chat. Paged by offset; dedupe by id. */
   vodComments: (id: string, offset: number): Promise<VodChatPage> =>
     ipcRenderer.invoke('vod:comments', id, offset),
@@ -70,8 +77,10 @@ const api = {
 }
 
 // The mobile bridge implements playback/chat but has no desktop window chrome.
-export type SlipstreamApi = Omit<typeof api, 'windowControls'> & {
+export type SlipstreamApi = Omit<typeof api, 'windowControls' | 'dvr'> & {
   windowControls?: typeof api.windowControls
+  /** Temporary disk recording is available in the desktop app. */
+  dvr?: DvrApi
 }
 
 contextBridge.exposeInMainWorld('slipstream', api)

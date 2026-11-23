@@ -77,6 +77,7 @@ or build it yourself with `npm run dist` — see [Development](#development).
 | `M` | mute |
 | `C` | show / hide chat |
 | `B` | show / hide favourites |
+| `X` | ask before stopping video and chat; No cancels |
 | `F2` | per-process memory readout |
 | pinch, or `Ctrl` + wheel | zoom into the video (up to 8x); scroll or drag to move around |
 | `0` | reset zoom |
@@ -156,9 +157,9 @@ and failing a 300MB target. Electron is also the stack PlayTime already holds ~1
 
 ### What Path A costs
 
-The back buffer lives in MSE SourceBuffers, in RAM, under a Chromium quota. `BACK_BUFFER_SECONDS`
-is 120 — roughly two minutes of rewind. Enough to scrub back over a teamfight. **Not** enough to
-sit out a three-minute ad break, which is exactly why Path B still matters.
+The browser back buffer lives in MSE SourceBuffers, in RAM, under a Chromium quota.
+`BACK_BUFFER_SECONDS` is 120 — roughly two minutes of ordinary rewind. Desktop long pauses now
+use the temporary disk recording described below, keeping that browser buffer small.
 
 ### Path B — mpv, embedded (deferred)
 
@@ -177,8 +178,43 @@ streamlink ... -o -   ->   mpv (--wid=<HWND> from getNativeWindowHandle())
 
 ## Rewind / DVR
 
-Worth its own section, because it solves a second problem for free. **Everything below describes
-Path B** — it is what a disk-backed buffer buys. Path A's rewind is the two minutes noted above.
+### Five-minute pause buffer (desktop)
+
+Pausing a live stream checks the **current broadcast's own ongoing VOD**, rather than guessing
+from the channel's latest video. If that archive is accessible and its timeline can be validated,
+Slipstream buffers five minutes from the paused frame at the selected quality. It then stops
+upstream video and playlist downloads while that batch remains unwatched. When one minute remains,
+it downloads another five minutes. Whole-segment boundaries can add a few seconds to each batch.
+Near live, a batch fills as the archive publishes footage; it cannot download future video.
+
+**No accessible current VOD means no recording.** Ordinary live playback continues and the
+controls show `Live only · No VOD`. There is no fallback that continuously records the live feed.
+An old archive on a channel is insufficient. Growing archives remain refillable after the broadcast
+ends; signed URLs renew against that same VOD, never the next live stream.
+
+Resume plays the buffered video from the paused frame, even after the live playlist has moved on.
+Browser buffering stays small. Quality stays fixed while watching the buffer. **Jump Live** deletes
+it, resolves the current live stream again and restores quality choices. The saved timeline begins
+with the paused segment. Segment timestamps are retained, but live chat still has its existing
+bounded history; this does not add a full long-pause chat replay.
+
+Buffered files live only under the app's `userData/temporary-recording` directory. Stop, channel/VOD
+changes and normal app exit abort downloads, close file readers and delete them. Shutdown waits for
+deletion. Any leftovers from a crash or forced termination are removed on the next launch.
+
+The safety ceiling remains **4 GiB**. Played segments more than two minutes behind the current
+playhead are deleted. Five minutes at 6 Mbps is approximately 225 MB, and a full unwatched batch
+does not keep growing through a long pause. If the disk fills, footage is missing or a failure
+persists after retries, the buffer stops with an explicit message and retains the playable portion.
+
+This path currently supports muxed MPEG-TS archives. Video variants without program dates require
+a validated clock from a continuous sequence-zero archive rendition; approximate creation dates
+are not used. Encrypted segments, fMP4 maps, byte ranges and separate external tracks are rejected
+with an explanation. Android and explicitly opened VOD playback retain their existing behavior.
+
+### Earlier mpv DVR proposal (deferred)
+
+The following describes Path B rather than the temporary recording implementation above.
 
 `--demuxer-max-back-bytes` *is* the rewind buffer. Verified present in mpv `v0.41.0-244-gaf9c81fa1`:
 
@@ -264,6 +300,7 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 - [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
 - [x] DVR scrub bar across the rewind buffer, with jump-to-live
+- [x] Desktop five-minute VOD-backed pause buffer; no VOD means no recording; deleted on stop and app exit
 - [x] **VOD playback** — see [VODs](#vods). Chat replay is the piece still missing
 - [ ] Configurable buffer length, and ad-skip — both gated on the seek probe below
 

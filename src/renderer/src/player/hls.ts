@@ -20,10 +20,10 @@ export interface PlayerEvents {
 /**
  * Seconds of already-played video hls.js keeps around for rewinding.
  *
- * This is the ceiling on the DVR for Path A, and it is a real ceiling: MSE keeps
+ * This limits the browser's in-memory rewind buffer: MSE keeps
  * the back buffer in RAM and Chromium throws QuotaExceededError past a few minutes
  * at 1080p60. Raising this is not free — it is the memory number this project is
- * being judged on. A disk-backed buffer needs mpv, which is the Path B question.
+ * being judged on. Desktop pause history is served separately from temporary disk storage.
  */
 export const BACK_BUFFER_SECONDS = 120
 
@@ -51,11 +51,38 @@ function namesByGroup(master: string): Map<string, string> {
   return out
 }
 
+/** Stable Twitch rendition identity; signed URLs and playlist order can change. */
+function renditionKey(attrs: Record<string, string>): string {
+  return JSON.stringify(['VIDEO', 'CODECS', 'RESOLUTION', 'FRAME-RATE'].map((key) => attrs[key] ?? ''))
+}
+
+function renditionUrls(master: string): Map<string, string> {
+  const urls = new Map<string, string>()
+  let attrs: Record<string, string> | null = null
+  for (const raw of master.split('\n')) {
+    const line = raw.trim()
+    if (line.startsWith('#EXT-X-STREAM-INF:')) {
+      attrs = {}
+      // Quoted CODECS values contain commas, so splitting on commas is unsafe.
+      for (const match of line.slice(line.indexOf(':') + 1).matchAll(/([\w-]+)=(?:"([^"]*)"|([^,]*))/g)) {
+        attrs[match[1]] = match[2] ?? match[3]
+      }
+    } else if (attrs && line && !line.startsWith('#')) {
+      // Twitch's resolved master contains absolute HTTPS rendition URLs.
+      if (attrs.VIDEO && /^https:\/\//i.test(line)) urls.set(renditionKey(attrs), line)
+      attrs = null
+    }
+  }
+  return urls
+}
+
 export class Player {
   private hls: Hls | null = null
   private objectUrl: string | null = null
   private staleReported = false
   private networkFailures = 0
+  private recorded = false
+  private recordedNetworkFailure = false
 
   constructor(
     private readonly video: HTMLVideoElement,
@@ -67,10 +94,12 @@ export class Player {
   }
 
   /** `startAt` resumes a VOD where it was; left out, hls.js picks the start. */
-  load(masterPlaylist: string, startAt?: number): void {
+  load(masterPlaylist: string, startAt?: number, options: { autoplay?: boolean; recorded?: boolean } = {}): void {
     this.destroy()
     this.staleReported = false
     this.networkFailures = 0
+    this.recorded = options.recorded ?? false
+    this.recordedNetworkFailure = false
 
     const hls = new Hls({
       enableWorker: true,
@@ -80,7 +109,8 @@ export class Player {
       // Start on the highest rendition rather than ramping up from 160p.
       startLevel: -1,
       capLevelToPlayerSize: false,
-      ...(startAt && startAt > 0 ? { startPosition: startAt } : {})
+      ...(options.recorded ? { liveSyncDurationCount: Number.MAX_SAFE_INTEGER, liveMaxLatencyDurationCount: Infinity, maxBufferLength: 30 } : {}),
+      ...(startAt !== undefined && startAt >= 0 ? { startPosition: startAt } : {})
     })
     this.hls = hls
 
@@ -95,6 +125,7 @@ export class Player {
         return { index, label, height: lvl.height ?? null, bitrate: lvl.bitrate }
       })
       this.events.onLevels(levels)
+      if (options.autoplay === false) return
       void this.video.play().catch(() => {
         /* autoplay can be refused; the play button is still there */
       })
@@ -110,12 +141,20 @@ export class Player {
       // 403/404 on a playlist means the signed token aged out. main has to
       // do the token dance again; hls.js cannot recover from this on its own.
       const status = data.response?.code
-      if ((status === 403 || status === 404) && !this.staleReported) {
+      if (!options.recorded && (status === 403 || status === 404) && !this.staleReported) {
         this.staleReported = true
         this.events.onStale()
         return
       }
       if (!data.fatal) return
+
+      if (options.recorded) {
+        this.recordedNetworkFailure = data.type === Hls.ErrorTypes.NETWORK_ERROR
+        this.events.onError(this.recordedNetworkFailure
+          ? `Temporary playback stopped (${data.details}). Press Play or seek to retry saved video, or Jump Live.`
+          : `Temporary video could not be decoded (${data.details}). Jump Live to return to the stream.`)
+        return
+      }
 
       switch (data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
@@ -146,8 +185,52 @@ export class Player {
     if (this.hls) this.hls.currentLevel = index
   }
 
+  /** Renew signed live URLs without detaching MSE or throwing away the DVR. */
+  renewLiveUrls(masterPlaylist: string): boolean {
+    const hls = this.hls
+    if (!hls?.levels.length) return false
+    const urls = renditionUrls(masterPlaylist)
+    const replacements = hls.levels.map((level) => urls.get(renditionKey(level.attrs)))
+    // Validate every rendition first: never leave ABR using a mix of old and new tokens.
+    if (replacements.some((url) => !url)) return false
+
+    hls.stopLoad()
+    hls.levels.forEach((level, index) => {
+      level.url[0] = replacements[index]!
+      // Renew immediately, even if the next regular playlist poll is not due.
+      if (level.details) level.details.requestScheduled = -1
+    })
+    this.staleReported = false
+    this.networkFailures = 0
+    // Keep the existing level details (segment timeline), SourceBuffers and pause state.
+    // startLoad enables buffering before requesting the playlist. Pause at that
+    // request so its immediate tick cannot download an expired fragment from
+    // the retained details; LEVEL_UPDATED means fresh details have been merged.
+    hls.once(Hls.Events.LEVEL_LOADING, () => hls.pauseBuffering())
+    hls.once(Hls.Events.LEVEL_UPDATED, () => hls.resumeBuffering())
+    hls.startLoad(this.video.currentTime, true)
+    return true
+  }
+
   get currentLevel(): number {
     return this.hls?.currentLevel ?? -1
+  }
+
+  pauseSnapshot(): { rendition: string; programDateTime: number } | null {
+    const hls = this.hls
+    const date = this.playingDate()
+    const rendition = hls?.levels[hls.currentLevel]?.attrs.VIDEO
+    return rendition && date !== null ? { rendition, programDateTime: date } : null
+  }
+
+  suspendLoading(): void { this.hls?.stopLoad() }
+  resumeLoading(): void { this.hls?.startLoad(this.video.currentTime, true) }
+
+  /** User initiated retry leaves the retained MSE timeline and recording intact. */
+  retryRecordedLoading(): void {
+    if (!this.recordedNetworkFailure) return
+    this.recordedNetworkFailure = false
+    this.hls?.startLoad(this.video.currentTime, true)
   }
 
   /**
@@ -158,6 +241,8 @@ export class Player {
    * against this moving window, not against a fixed duration.
    */
   seekableWindow(): { start: number; end: number; current: number } {
+    const details = this.recorded ? this.hls?.latestLevelDetails : null
+    if (details) return { start: details.fragmentStart, end: details.edge, current: this.video.currentTime }
     const s = this.video.seekable
     const b = this.video.buffered
     const start = s.length ? s.start(0) : b.length ? b.start(0) : 0
@@ -169,6 +254,7 @@ export class Player {
     const { start, end } = this.seekableWindow()
     // Clamp inside the window; seeking past the live edge stalls the demuxer.
     this.video.currentTime = Math.min(end, Math.max(start, time))
+    this.retryRecordedLoading()
   }
 
   /**

@@ -87,7 +87,8 @@
 .mobile-appearance .theme-inline { padding: 0; }
 .mobile-shell.has-profile .channel-profile { padding-top: 16px; }
 .mobile-shell .channel-profile-header { gap: 12px; }
-.mobile-shell .channel-profile-actions .btn { min-height: 44px; height: auto; }
+.mobile-shell .channel-profile-actions { width: 100%; margin-left: 0; gap: 10px; }
+.mobile-shell .channel-profile-actions .btn { flex: 1 1 auto; min-height: 48px; height: auto; padding: 12px 16px; font-size: 15px; }
 .mobile-shell .channel-profile-avatar { width: 64px; height: 64px; font-size: 26px; }
 .mobile-player .app.is-browsing { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "titlebar" "stage"; }
 .mobile-player .app.is-browsing > .stage { grid-column: 1; aspect-ratio: auto; }

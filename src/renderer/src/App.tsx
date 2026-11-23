@@ -10,6 +10,7 @@ import type {
 import { EMOTE_PROVIDERS } from '@shared/types'
 import { parseWatchInput, type WatchTarget } from '@shared/channel'
 import { Player, type QualityLevel } from './player/hls'
+import { PauseRecording, type RecordingState } from './player/pauseRecording'
 import { useVideoZoom } from './player/zoom'
 import { useFullscreenControls } from './player/useFullscreenControls'
 import { TwitchChat, type ChatState } from './chat/irc'
@@ -19,6 +20,7 @@ import { VodChat, type VodChatState } from './chat/vodChat'
 import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
+import { StopConfirmation } from './components/StopConfirmation'
 import { MemoryHud } from './components/MemoryHud'
 import { ChatMenu } from './components/ChatMenu'
 import { Favourites } from './components/Favourites'
@@ -144,6 +146,10 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
   const zoom = useVideoZoom(wrapRef, videoRef)
   const logRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Player | null>(null)
+  const recordingRef = useRef<PauseRecording | null>(null)
+  const liveArmedRef = useRef(false)
+  const liveMasterRef = useRef<string | null>(null)
+  const [recording, setRecording] = useState<RecordingState>({ kind: 'idle', error: null })
   const chatRef = useRef<TwitchChat | null>(null)
   const listRef = useRef<ChatList | null>(null)
   const syncRef = useRef<ChatSync | null>(null)
@@ -155,6 +161,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
   /** Mirrors loginRef for rendering; a ref alone would not trigger an update. */
   const [channel, setChannel] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [stopRequested, setStopRequested] = useState(false)
   const [levels, setLevels] = useState<QualityLevel[]>([])
   /** What hls.js is actually playing. Under ABR this moves on its own. */
   const [activeLevel, setActiveLevel] = useState(-1)
@@ -336,6 +343,10 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
       return
     }
 
+    setStopRequested(false)
+    liveArmedRef.current = false
+    liveMasterRef.current = null
+    void recordingRef.current?.cancel()
     targetRef.current = target
     vodRef.current = isVod
     loginRef.current = login
@@ -382,6 +393,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     }
 
     setPhase({ kind: 'playing', stream: result.stream })
+    liveMasterRef.current = result.stream.kind === 'vod' ? null : result.stream.masterPlaylist
     playerRef.current?.load(result.stream.masterPlaylist)
     syncRef.current?.reset()
     // Drop the previous channel's emote table. Until the new one arrives this
@@ -506,6 +518,10 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
    * let go, so nothing is downloading until you pick another channel.
    */
   const stop = useCallback((): void => {
+    setStopRequested(false)
+    liveArmedRef.current = false
+    liveMasterRef.current = null
+    void recordingRef.current?.cancel()
     setProfileLogin(null)
     // Clearing the ref also makes any in-flight resolve discard itself.
     targetRef.current = null
@@ -530,8 +546,13 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     if (listRef.current) listRef.current.emotes = null
   }, [])
 
+  const requestStop = useCallback((): void => {
+    if (phase.kind !== 'idle') setStopRequested(true)
+  }, [phase.kind])
+
   /** Re-run the token dance and swap the manifest without disturbing chat. */
   const refresh = useCallback(async (): Promise<void> => {
+    if (recordingRef.current?.busy || recordingRef.current?.retained) return
     const target = targetRef.current
     if (!target) return
     let result: ResolveResult
@@ -544,13 +565,20 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     } catch {
       return // the stream is still playing; a failed refresh is not worth a teardown
     }
-    if (targetRef.current !== target) return
+    if (targetRef.current !== target || recordingRef.current?.busy || recordingRef.current?.retained) return
     if (result.ok) {
-      // A live stream rejoins at the edge; a VOD has to come back where it was,
-      // not at 0:00 of a fourteen hour broadcast.
-      const resumeAt = target.kind === 'vod' ? (videoRef.current?.currentTime ?? 0) : undefined
+      if (target.kind === 'channel') {
+        liveMasterRef.current = result.stream.masterPlaylist
+        // Recreating the player erases the DVR and forces anyone watching behind
+        // back to live. Swap only the signed URLs, retaining the buffered timeline.
+        if (!playerRef.current?.renewLiveUrls(result.stream.masterPlaylist)) {
+          setPhase({ kind: 'error', reason: 'error', message: 'The stream qualities changed while renewing playback. Reopen the channel to continue.' })
+          return
+        }
+      } else {
+        playerRef.current?.load(result.stream.masterPlaylist, videoRef.current?.currentTime ?? 0)
+      }
       setPhase({ kind: 'playing', stream: result.stream })
-      playerRef.current?.load(result.stream.masterPlaylist, resumeAt)
     } else {
       setPhase({ kind: 'error', reason: result.reason, message: result.message })
     }
@@ -593,6 +621,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     const player = new Player(video, {
       onLevels: (next) => {
         setLevels(next)
+        if (recordingRef.current?.retained) return
         // Re-apply a remembered choice on every new stream. Matching on the label
         // is the point: "720p60" survives a channel change, index 2 does not.
         const wanted = pinnedRef.current
@@ -601,16 +630,38 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
         else if (wanted) setPinnedLabel(null) // this channel does not offer it
       },
       onLevelSwitch: setActiveLevel,
-      onError: (message) => setPhase({ kind: 'error', reason: 'error', message }),
-      onStale: () => void refresh()
+      onError: (message) => {
+        if (recordingRef.current?.retained) recordingRef.current.reportError(message)
+        else setPhase({ kind: 'error', reason: 'error', message })
+      },
+      onStale: () => {
+        if (recordingRef.current?.retained) recordingRef.current.reportError('Temporary buffer could not be read. Jump Live to return to the stream.')
+        else if (!recordingRef.current?.busy) void refresh()
+      }
     })
     playerRef.current = player
+    const api = window.slipstream.dvr
+    if (api) recordingRef.current = new PauseRecording(api, {
+      suspend: () => player.suspendLoading(),
+      restore: (play) => {
+        player.resumeLoading()
+        if (play) void video.play().catch(() => undefined)
+      },
+      load: (result, autoplay) => {
+        liveArmedRef.current = false
+        player.load(result.masterPlaylist, result.startAt, { autoplay, recorded: true })
+      },
+      changed: setRecording
+    })
 
     const traffic = new EmoteTraffic()
     traffic.start()
     trafficRef.current = traffic
 
     return () => {
+      liveArmedRef.current = false
+      void recordingRef.current?.cancel()
+      recordingRef.current = null
       traffic.stop()
       player.destroy()
       chat.disconnect()
@@ -638,15 +689,55 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    const onPlay = (): void => setPlaying(true)
-    const onPause = (): void => setPlaying(false)
+    const onPlay = (): void => {
+      if (recordingRef.current?.busy) {
+        recordingRef.current.resume()
+        video.pause()
+        return
+      }
+      playerRef.current?.retryRecordedLoading()
+      setPlaying(true)
+    }
+    const onPlaying = (): void => { liveArmedRef.current = true }
+    const onPause = (): void => {
+      setPlaying(false)
+      if (!liveArmedRef.current || vodRef.current || !liveMasterRef.current) return
+      const coordinator = recordingRef.current
+      if (!coordinator || coordinator.state.kind !== 'idle') return
+      const snapshot = playerRef.current?.pauseSnapshot()
+      if (snapshot) coordinator.pause(snapshot)
+      else setRecording({ kind: 'failed', error: 'Could not save this pause: the stream did not provide a playback timestamp.' })
+    }
     video.addEventListener('play', onPlay)
+    video.addEventListener('playing', onPlaying)
     video.addEventListener('pause', onPause)
     return () => {
       video.removeEventListener('play', onPlay)
+      video.removeEventListener('playing', onPlaying)
       video.removeEventListener('pause', onPause)
     }
   }, [])
+
+  useEffect(() => {
+    if (recording.kind !== 'recording' || !window.slipstream.dvr) return
+    const coordinator = recordingRef.current
+    const api = window.slipstream.dvr
+    let cancelled = false
+    let polling = false
+    const tick = async (): Promise<void> => {
+      if (polling) return
+      polling = true
+      try {
+        await api.position(videoRef.current?.currentTime ?? 0)
+        const status = await api.status()
+        if (!cancelled && coordinator === recordingRef.current && status.error) coordinator?.reportError(status.error)
+      } catch (error) {
+        if (!cancelled) coordinator?.reportError(error instanceof Error ? error.message : String(error))
+      } finally { polling = false }
+    }
+    const timer = setInterval(() => void tick(), 1000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [recording.kind])
 
   useEffect(() => {
     const video = videoRef.current
@@ -758,18 +849,53 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
 
   const seek = useCallback((delta: number): void => {
     const video = videoRef.current
-    if (video) video.currentTime += delta
+    if (video) playerRef.current?.seekTo(video.currentTime + delta)
   }, [])
 
   const togglePlay = useCallback((): void => {
     const video = videoRef.current
     if (!video) return
-    if (video.paused) void video.play().catch(() => undefined)
+    if (recordingRef.current?.togglePreparing()) return
+    if (video.paused) {
+      if (recordingRef.current?.resume()) return
+      playerRef.current?.retryRecordedLoading()
+      void video.play().catch(() => undefined)
+    }
     else video.pause()
+  }, [])
+
+  const jumpLive = useCallback((): void => {
+    const coordinator = recordingRef.current
+    const target = targetRef.current
+    if (!coordinator || coordinator.state.kind === 'idle' || coordinator.state.kind === 'unavailable') {
+      playerRef.current?.seekToLive()
+      return
+    }
+    liveArmedRef.current = false
+    // Release media readers before Windows removes the recorded segments.
+    playerRef.current?.stop()
+    void coordinator.cancel().then(async () => {
+      if (targetRef.current !== target || target?.kind !== 'channel') return
+      try {
+        const result = await withTimeout(window.slipstream.resolve(target.login), RESOLVE_TIMEOUT_MS, 'Twitch did not answer within 60 seconds.')
+        if (targetRef.current !== target) return
+        if (!result.ok) {
+          setPhase({ kind: 'error', reason: result.reason, message: result.message })
+          return
+        }
+        liveMasterRef.current = result.stream.masterPlaylist
+        setPhase({ kind: 'playing', stream: result.stream })
+        playerRef.current?.load(result.stream.masterPlaylist)
+      } catch (error) {
+        if (targetRef.current === target) setPhase({ kind: 'error', reason: 'error', message: error instanceof Error ? error.message : String(error) })
+      }
+    })
   }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // Let the modal's focused buttons and Escape handle keys normally.
+      if (stopRequested) return
       const target = e.target as HTMLElement | null
       // Only bail for real text entry. Bailing for every input meant that once
       // you touched the volume slider, every shortcut silently stopped working.
@@ -794,7 +920,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
           break
         case 'l':
           // A VOD has no live edge; this would jump to its last second.
-          if (!vodRef.current) playerRef.current?.seekToLive()
+          if (!vodRef.current) jumpLive()
           break
         case 'm':
           setMuted((v) => !v)
@@ -809,7 +935,8 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
           })
           break
         case 'x':
-          stop()
+          e.preventDefault()
+          if (!e.repeat) requestStop()
           break
         case 'f2':
           setHudVisible((v) => !v)
@@ -821,7 +948,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [seek, togglePlay, toggleChat, stop, zoom.reset])
+  }, [seek, togglePlay, toggleChat, requestStop, stopRequested, zoom.reset, jumpLive])
 
   // --------------------------------------------------------------- view
 
@@ -900,7 +1027,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
-      <main className={`stage glass-frame${fullscreenControlsHidden ? ' controls-hidden' : ''}`} ref={stageRef}>
+      <main className={`stage glass-frame${fullscreenControlsHidden && !stopRequested ? ' controls-hidden' : ''}`} ref={stageRef}>
         {profileLogin && <div className="channel-profile-scroll"><ChannelProfile key={profileLogin} login={profileLogin}
           favourites={favourites} onFavouritesChange={updateProfileFavourites}
           onWatchLive={() => void start(profileLogin)} onPickVod={(id) => void start(`videos/${id}`)} /></div>}
@@ -952,14 +1079,15 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
           ready={phase.kind === 'playing'}
           vod={phase.kind === 'playing' && phase.stream.kind === 'vod'}
           storyboard={phase.kind === 'playing' ? phase.stream.video?.storyboard : null}
-          playing={playing}
+          playing={recording.kind === 'preparing' ? !!recording.resumeRequested : playing}
           onPlayPause={togglePlay}
-          onStop={stop}
+          onStop={requestStop}
           canStop={phase.kind !== 'idle'}
           onSeek={seek}
           dvr={dvr}
           onSeekTo={(time) => playerRef.current?.seekTo(time)}
-          onJumpLive={() => playerRef.current?.seekToLive()}
+          onJumpLive={jumpLive}
+          recording={recording}
           volume={volume}
           muted={muted}
           onVolume={(v) => {
@@ -982,6 +1110,12 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
               if (match) playerRef.current?.setLevel(match.index)
             }
           }}
+        />
+        <StopConfirmation
+          open={stopRequested}
+          hasBuffer={recording.kind === 'preparing' || recording.kind === 'recording'}
+          onCancel={() => setStopRequested(false)}
+          onConfirm={stop}
         />
       </main>
 

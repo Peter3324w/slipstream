@@ -23,14 +23,18 @@
 /** Where Twitch serves VODs from. Ten channels sampled, archives to uploads: all here. */
 export const VOD_CDN = 'https://*.cloudfront.net'
 
-export function contentSecurityPolicy(): string {
+export function contentSecurityPolicy(recordingOrigin?: string): string {
+  // The recorder starts before the window. Its port stays fixed until app exit.
+  const localRecording = recordingOrigin && /^http:\/\/127\.0\.0\.1:\d+$/.test(recordingOrigin)
+    ? ` ${recordingOrigin}`
+    : ''
   return [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.7tv.app https://cdn.betterttv.net https://cdn.frankerfacez.com ${VOD_CDN}`,
     "media-src 'self' blob:",
-    `connect-src 'self' blob: https://*.ttvnw.net ${VOD_CDN} wss://irc-ws.chat.twitch.tv`,
+    `connect-src 'self' blob: https://*.ttvnw.net ${VOD_CDN} wss://irc-ws.chat.twitch.tv${localRecording}`,
     "object-src 'none'",
     "frame-src 'none'"
   ].join('; ')
