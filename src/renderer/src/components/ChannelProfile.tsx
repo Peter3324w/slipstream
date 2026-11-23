@@ -56,12 +56,12 @@ export function ChannelProfile({ login, onWatchLive, onPickVod, favourites, onFa
       </div>
       {profile?.exists === true && <div className="channel-profile-actions">
         {profile.live && <button className="btn channel-watch-live" onClick={onWatchLive}>
-          <span className="channel-action-icon" aria-hidden="true"><Play /></span>
+          <span className="channel-action-icon" aria-hidden="true"><Play size={18} /></span>
           Watch live
         </button>}
         <button className="btn channel-favourite" aria-pressed={favourite} disabled={saving}
           title={favourite ? 'Remove from favourites' : 'Add to favourites'} onClick={() => void toggleFavourite()}>
-          <span className="channel-action-icon" aria-hidden="true"><Heart filled={favourite} /></span>
+          <span className="channel-action-icon" aria-hidden="true"><Heart size={18} filled={favourite} /></span>
           {saving ? 'Saving…' : favourite ? 'Added to favourites' : 'Add to favourites'}
         </button>
       </div>}

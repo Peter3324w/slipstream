@@ -304,8 +304,18 @@ input { font: inherit; color: inherit; }
 .channel-profile-identity h1 { margin: 0 0 6px; font-size: clamp(22px, 4cqi, 32px); letter-spacing: -0.7px; overflow-wrap: anywhere; }
 .channel-profile-identity p { margin: 0; color: var(--muted); font-size: 14px; }
 .channel-watch-live { flex: none; background: var(--accent); color: var(--on-accent); }
-.channel-profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.channel-profile-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.channel-profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; }
+.channel-profile-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
 .channel-action-icon { display: inline-flex; flex: none; }
 .channel-favourite[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
 .channel-profile-error { color: var(--danger); font-size: 13px; margin: 0 0 16px; }
