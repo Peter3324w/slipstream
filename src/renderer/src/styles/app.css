@@ -1395,6 +1395,7 @@ input { font: inherit; color: inherit; }
 }
 .stop-confirmation::backdrop { background: rgb(0 0 0 / 0.65); }
 .stop-confirmation h2 { margin: 0 0 10px; font-size: 18px; line-height: 1.35; font-weight: 650; }
+.stop-confirmation h2:last-of-type { margin-bottom: 24px; }
 .stop-confirmation p { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .stop-confirmation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .stop-confirmation .btn { height: auto; min-height: 44px; padding: 10px 12px; font-weight: 600; }

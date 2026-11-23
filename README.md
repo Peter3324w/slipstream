@@ -77,7 +77,7 @@ or build it yourself with `npm run dist` — see [Development](#development).
 | `M` | mute |
 | `C` | show / hide chat |
 | `B` | show / hide favourites |
-| `X` | ask before stopping video and chat; Keep watching cancels |
+| `X` | ask before stopping video and chat; No cancels |
 | `F2` | per-process memory readout |
 | pinch, or `Ctrl` + wheel | zoom into the video (up to 8x); scroll or drag to move around |
 | `0` | reset zoom |

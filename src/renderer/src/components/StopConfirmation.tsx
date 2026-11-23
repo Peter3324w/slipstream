@@ -28,22 +28,20 @@ export function StopConfirmation({ open, hasBuffer, onCancel, onConfirm }: Props
       className="stop-confirmation"
       role="alertdialog"
       aria-labelledby="stop-confirmation-title"
-      aria-describedby="stop-confirmation-description"
+      aria-describedby={hasBuffer ? 'stop-confirmation-description' : undefined}
       onKeyDown={(event) => { if (open) event.stopPropagation() }}
       onCancel={(event) => { event.preventDefault(); onCancel() }}
       onClose={onCancel}
       onClick={(event) => { if (event.target === event.currentTarget) onCancel() }}
     >
-      <h2 id="stop-confirmation-title">Stop watching?</h2>
-      <p id="stop-confirmation-description">
-        Video and chat will stop.{hasBuffer && ' Your temporary buffer will be deleted.'}
-      </p>
+      <h2 id="stop-confirmation-title">Are you sure you want to stop watching?</h2>
+      {hasBuffer && <p id="stop-confirmation-description">Your temporary buffer will be deleted.</p>}
       <div className="stop-confirmation-actions">
-        <button ref={keepRef} className="btn" type="button" data-keep-watching onClick={onCancel}>
-          Keep watching
-        </button>
         <button className="btn stop-confirmation-stop" type="button" data-confirm-stop onClick={onConfirm}>
-          Stop watching
+          Yes
+        </button>
+        <button ref={keepRef} className="btn" type="button" data-keep-watching onClick={onCancel}>
+          No
         </button>
       </div>
     </dialog>
