@@ -316,6 +316,50 @@ export interface VodInfo {
   seekPreviews: string | null
 }
 
+export interface OngoingArchive {
+  id: string
+  masterPlaylist: string
+}
+
+/** Resolve only the archive Twitch attaches to this exact current broadcast. */
+export async function ongoingArchive(login: string, streamId: string): Promise<OngoingArchive | null> {
+  if (!login || !streamId) return null
+  try {
+    const response = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': WEB_CLIENT_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query PauseArchive($login: String!) {
+  user(login: $login) {
+    stream {
+      id
+      archiveVideo { id status broadcastType owner { login } self { isRestricted } }
+    }
+  }
+}`,
+        variables: { login }
+      }),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!response.ok) return null
+    const body = await response.json() as {
+      data?: { user?: { stream?: {
+        id?: string
+        archiveVideo?: { id?: string; status?: string; broadcastType?: string; owner?: { login?: string }; self?: { isRestricted?: boolean } } | null
+      } | null } | null }
+    }
+    const stream = body.data?.user?.stream
+    const archive = stream?.archiveVideo
+    if (stream?.id !== streamId || !archive?.id || !/^\d{1,15}$/.test(archive.id) ||
+      archive.owner?.login?.toLowerCase() !== login.toLowerCase() || archive.self?.isRestricted !== false ||
+      archive.status !== 'RECORDING' || archive.broadcastType !== 'ARCHIVE') return null
+    const masterPlaylist = await vodMaster(archive.id)
+    return masterPlaylist ? { id: archive.id, masterPlaylist } : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * What Twitch knows about one VOD. Never throws: playback does not depend on it,
  * so a failed lookup costs a nicer header and nothing else.

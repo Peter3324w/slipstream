@@ -627,7 +627,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
         else setPhase({ kind: 'error', reason: 'error', message })
       },
       onStale: () => {
-        if (recordingRef.current?.retained) recordingRef.current.reportError('Temporary recording could not be read. Jump Live to return to the stream.')
+        if (recordingRef.current?.retained) recordingRef.current.reportError('Temporary buffer could not be read. Jump Live to return to the stream.')
         else if (!recordingRef.current?.busy) void refresh()
       }
     })
@@ -695,7 +695,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
       setPlaying(false)
       if (!liveArmedRef.current || vodRef.current || !liveMasterRef.current) return
       const coordinator = recordingRef.current
-      if (!coordinator || coordinator.busy || coordinator.retained) return
+      if (!coordinator || coordinator.state.kind !== 'idle') return
       const snapshot = playerRef.current?.pauseSnapshot()
       if (snapshot) coordinator.pause(snapshot)
       else setRecording({ kind: 'failed', error: 'Could not save this pause: the stream did not provide a playback timestamp.' })
@@ -859,7 +859,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
   const jumpLive = useCallback((): void => {
     const coordinator = recordingRef.current
     const target = targetRef.current
-    if (!coordinator || coordinator.state.kind === 'idle') {
+    if (!coordinator || coordinator.state.kind === 'idle' || coordinator.state.kind === 'unavailable') {
       playerRef.current?.seekToLive()
       return
     }

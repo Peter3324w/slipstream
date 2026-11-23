@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { build } from 'esbuild'
 
-async function launch(t, cleanupFails = false) {
-  const context = { handlers: new Map(), windows: [], quits: 0, disposed: 0 }
+async function launch(t, cleanupFails = false, storageAvailable = false) {
+  const context = { handlers: new Map(), windows: [], quits: 0, disposed: 0, starts: 0 }
   t.mock.method(console, 'error', () => {})
   const app = Object.assign(new EventEmitter(), {
     isPackaged: false, setAppUserModelId() {}, commandLine: { appendSwitch() {} },
@@ -29,7 +29,8 @@ async function launch(t, cleanupFails = false) {
   }
   context.Recorder = class {
     origin = ''
-    async initialize() { throw new Error('Recording directory access denied') }
+    async initialize() { if (!storageAvailable) throw new Error('Recording directory access denied') }
+    async start() { context.starts++; throw new Error('Unexpected recording without an archive') }
     async stop() {}
     async dispose() { context.disposed++; if (cleanupFails) throw new Error('Recording directory still locked') }
     status() { return { active: false, bytes: 0, error: null } }
@@ -46,7 +47,7 @@ async function launch(t, cleanupFails = false) {
         ? `const e=globalThis.__recordingStartupTest.electron; export const {app,BrowserWindow,Menu,shell,safeStorage,ipcMain,session}=e`
         : path === './dvr' ? 'export const TemporaryDvr=globalThis.__recordingStartupTest.Recorder'
         : path === './auth' ? 'export const accessToken=()=>null,beginDeviceFlow=()=>null,cancelDeviceFlow=()=>null,initAuth=()=>{},loadClientId=async()=>{},restoreSession=async()=>{},setClientId=()=>null,signOut=()=>null,status=()=>null'
-        : `export const resolveChannel=async()=>({ok:true,stream:{kind:'live',masterPlaylist:'#EXTM3U'}}),resolveVod=async()=>({ok:true,stream:{kind:'vod',masterPlaylist:'#EXTM3U'}}),streamlinkVersion=async()=>null` }))
+        : `export const resolveChannel=async()=>({ok:true,stream:{kind:'live',channel:{id:'live-123'},masterPlaylist:'#EXTM3U'}}),resolveVod=async()=>({ok:true,stream:{kind:'vod',masterPlaylist:'#EXTM3U'}}),streamlinkVersion=async()=>null` }))
     } }]
   })
   await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}#${Math.random()}`)
@@ -73,4 +74,19 @@ test('an unavailable recorder does not trap app exit if its inaccessible old dir
   context.electron.app.emit('before-quit', { preventDefault() {} })
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(context.quits, 1)
+})
+
+test('main returns no-VOD without starting the disk recorder or fetching video', async t => {
+  const requests = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push(String(url))
+    assert.equal(String(url), 'https://gql.twitch.tv/gql')
+    assert.match(JSON.parse(options.body).query, /archiveVideo/)
+    return Response.json({ data: { user: { stream: { id: 'live-123', archiveVideo: null } } } })
+  })
+  const context = await launch(t, false, true)
+  await context.handlers.get('stream:resolve')({}, 'faide')
+  assert.equal(await context.handlers.get('dvr:start')({}, 'source', Date.now()), null)
+  assert.equal(context.starts, 0)
+  assert.equal(requests.length, 1)
 })

@@ -177,31 +177,39 @@ streamlink ... -o -   ->   mpv (--wid=<HWND> from getNativeWindowHandle())
 
 ## Rewind / DVR
 
-### Temporary pause recording (desktop)
+### Five-minute pause buffer (desktop)
 
-Pausing a live stream starts a temporary recording of the selected quality. Video continues
-downloading while paused; Resume plays the saved video from the paused frame, even after Twitch's
-live playlist moves past it. Browser buffering stays small. Segment timestamps are retained, but
-live chat still has its existing bounded history; this does not add a full long-pause chat replay.
-Quality stays fixed while watching the recording. **Jump Live** deletes the recording, resolves
-the current live stream again and restores quality choices.
-The saved timeline starts with the paused segment; it does not recover earlier live history.
+Pausing a live stream checks the **current broadcast's own ongoing VOD**, rather than guessing
+from the channel's latest video. If that archive is accessible and its timeline can be validated,
+Slipstream buffers five minutes from the paused frame at the selected quality. It then stops
+upstream video and playlist downloads while that batch remains unwatched. When one minute remains,
+it downloads another five minutes. Whole-segment boundaries can add a few seconds to each batch.
+Near live, a batch fills as the archive publishes footage; it cannot download future video.
 
-Recordings live only under the app's `userData/temporary-recording` directory. Stop, channel/VOD
+**No accessible current VOD means no recording.** Ordinary live playback continues and the
+controls show `Live only · No VOD`. There is no fallback that continuously records the live feed.
+An old archive on a channel is insufficient. Growing archives remain refillable after the broadcast
+ends; signed URLs renew against that same VOD, never the next live stream.
+
+Resume plays the buffered video from the paused frame, even after the live playlist has moved on.
+Browser buffering stays small. Quality stays fixed while watching the buffer. **Jump Live** deletes
+it, resolves the current live stream again and restores quality choices. The saved timeline begins
+with the paused segment. Segment timestamps are retained, but live chat still has its existing
+bounded history; this does not add a full long-pause chat replay.
+
+Buffered files live only under the app's `userData/temporary-recording` directory. Stop, channel/VOD
 changes and normal app exit abort downloads, close file readers and delete them. Shutdown waits for
 deletion. Any leftovers from a crash or forced termination are removed on the next launch.
 
-The recording ceiling is **4 GiB**. Played segments more than two minutes behind the current
-playhead are deleted as recording continues. The paused frame and unplayed backlog are retained;
-if they fill the limit, recording stops with an explicit message and keeps the video already saved.
-Network gaps and disk failures also stop recording rather than silently joining separated footage
-or jumping live. Forty minutes at 6 Mbps is approximately 1.8 GB and continues using bandwidth
-throughout the pause.
+The safety ceiling remains **4 GiB**. Played segments more than two minutes behind the current
+playhead are deleted. Five minutes at 6 Mbps is approximately 225 MB, and a full unwatched batch
+does not keep growing through a long pause. If the disk fills, footage is missing or a failure
+persists after retries, the buffer stops with an explicit message and retains the playable portion.
 
-This path currently supports dated, muxed MPEG-TS live playlists. Encrypted segments, fMP4 maps,
-byte ranges and separate external tracks are rejected with an explanation. Android and VOD playback
-retain their existing behavior. If the paused frame has already disappeared from the remote playlist
-before recording starts, it cannot be recovered by this recording.
+This path currently supports muxed MPEG-TS archives. Video variants without program dates require
+a validated clock from a continuous sequence-zero archive rendition; approximate creation dates
+are not used. Encrypted segments, fMP4 maps, byte ranges and separate external tracks are rejected
+with an explanation. Android and explicitly opened VOD playback retain their existing behavior.
 
 ### Earlier mpv DVR proposal (deferred)
 
@@ -291,7 +299,7 @@ v1 asked one question — does this come in under 300MB? Idle, yes. Under load, 
 - [x] Send chat messages
 - [x] Third-party emotes — 7TV, BTTV and FFZ, each switchable on its own
 - [x] DVR scrub bar across the rewind buffer, with jump-to-live
-- [x] Desktop temporary disk recording for long live pauses, deleted on stop and app exit
+- [x] Desktop five-minute VOD-backed pause buffer; no VOD means no recording; deleted on stop and app exit
 - [x] **VOD playback** — see [VODs](#vods). Chat replay is the piece still missing
 - [ ] Configurable buffer length, and ad-skip — both gated on the seek probe below
 

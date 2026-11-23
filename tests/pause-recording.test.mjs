@@ -86,6 +86,59 @@ test('failure after requested resume restores original loading and playback', as
   assert.deepEqual(calls.at(-1), ['restore', true])
 })
 
+for (const resume of [false, true]) {
+  test(`no archive restores ordinary loading with play intent ${resume} and never retries until reset`, async () => {
+    const { coordinator, calls, resolve } = setup()
+    const snapshot = { rendition: 'source', programDateTime: 1000 }
+    coordinator.pause(snapshot)
+    if (resume) coordinator.resume()
+    resolve(null); await flush()
+    assert.equal(coordinator.state.kind, 'unavailable')
+    assert.equal(coordinator.state.error, null)
+    assert.equal(coordinator.retained, false)
+    assert.equal(coordinator.busy, false)
+    assert.equal(calls.some(([name]) => name === 'load'), false)
+    assert.deepEqual(calls.at(-1), ['restore', resume])
+    coordinator.pause(snapshot)
+    assert.equal(coordinator.resume(), false)
+    assert.equal(calls.filter(([name]) => name === 'start').length, 1)
+    await coordinator.cancel()
+    coordinator.pause(snapshot); await flush()
+    assert.equal(calls.filter(([name]) => name === 'start').length, 2)
+  })
+}
+
+test('cancel invalidates a pending no-archive response without restoring old playback', async () => {
+  const { coordinator, calls, resolve } = setup()
+  coordinator.pause({ rendition: 'source', programDateTime: 1000 })
+  await flush()
+  coordinator.resume()
+  await coordinator.cancel()
+  resolve(null); await flush()
+  assert.equal(coordinator.state.kind, 'idle')
+  assert.equal(calls.some(([name]) => name === 'restore' || name === 'load'), false)
+})
+
+test('controls show neutral no-VOD status without claiming a temporary buffer or fixed quality', async () => {
+  const output = await build({ stdin: { contents: `import React from 'react'; import {renderToStaticMarkup} from 'react-dom/server'; import {Controls} from './src/renderer/src/components/Controls'; export const render=(props)=>renderToStaticMarkup(React.createElement(Controls,props));`, resolveDir: process.cwd() }, bundle: true, platform: 'node', packages: 'external', write: false, format: 'cjs' })
+  const module = { exports: {} }
+  const require = createRequire(import.meta.url)
+  new Function('require', 'module', 'exports', 'React', output.outputFiles[0].text)(require, module, module.exports, require('react'))
+  const base = { fullscreenTarget: { current: null }, ready: true, canStop: true, playing: false, dvr: { start: 0, end: 10, current: 10 }, vod: false, volume: 0.5, muted: false, levels: [{ index: 0, label: '720p60', bitrate: 3000000 }], activeLevel: 0, pinnedLabel: null }
+  const unavailable = module.exports.render({ ...base, recording: { kind: 'unavailable', error: null } })
+  assert.match(unavailable, /Live only · No VOD/)
+  assert.doesNotMatch(unavailable, /Temporary buffer|Fixed|>Jump Live</)
+  assert.doesNotMatch(unavailable, /Saved temporarily/)
+  assert.match(unavailable, /disabled=""[^>]*>LIVE<\/button>/)
+  const recording = module.exports.render({ ...base, recording: { kind: 'recording', error: null } })
+  assert.match(recording, /Temporary buffer/)
+  assert.match(recording, /Fixed/)
+  assert.match(recording, />Jump Live</)
+  const preparing = module.exports.render({ ...base, recording: { kind: 'preparing', error: null } })
+  assert.match(preparing, /Preparing temporary buffer/)
+  assert.match(preparing, />Jump Live</)
+})
+
 test('cancel and start another channel rejects old preparation without stopping the new recording', async () => {
   const { coordinator, calls, resolve } = setup()
   coordinator.pause({ rendition: 'old', programDateTime: 1000 }); await flush()

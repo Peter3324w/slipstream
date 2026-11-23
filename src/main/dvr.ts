@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 type DvrStartResult = { masterPlaylist: string; startAt: number }
 type DvrStatus = { active: boolean; bytes: number; error: string | null }
-type Options = { fetch?: typeof fetch; resolveMaster?: () => Promise<string>; maxBytes?: number; pollMs?: number }
+type Options = { fetch?: typeof fetch; resolveMaster?: () => Promise<string>; maxBytes?: number; pollMs?: number; initialWaitMs?: number }
 type Segment = { sequence: number; duration: number; date: number; url: string; discontinuity: boolean; offset: number; bytes: number }
 type Playlist = { segments: Segment[]; ended: boolean; discontinuitySequence: number }
 class TransientDownloadError extends Error {}
@@ -34,28 +34,45 @@ function variant(master: string, rendition: string): { url: string; metadata: st
   throw new Error('Recording rendition is no longer available')
 }
 
-function parseMedia(text: string, url: string): Playlist {
+function parseMedia(text: string, url: string, originDate?: number): Playlist {
   if (!text.trimStart().startsWith('#EXTM3U')) throw new Error('Invalid recording playlist')
   const segments: Segment[] = []
-  let sequence = 0, duration = 0, date = NaN, discontinuity = false, discontinuitySequence = 0
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim()
+  const lines = text.split(/\r?\n/).map(line => line.trim())
+  const normalized = lines.join('\n')
+  let sequence = 0, duration = 0, date = NaN, discontinuity = false, discontinuitySequence = 0, explicitDate = false
+  const fullContinuous = Number(/^#EXT-X-MEDIA-SEQUENCE:(\d+)/m.exec(normalized)?.[1] ?? 0) === 0 &&
+    Number(/^#EXT-X-DISCONTINUITY-SEQUENCE:(\d+)/m.exec(normalized)?.[1] ?? 0) === 0 && !lines.includes('#EXT-X-DISCONTINUITY')
+  let expectedDate = originDate
+  for (const line of lines) {
     if (/^#EXT-X-(MAP|BYTERANGE|GAP|SKIP|I-FRAMES-ONLY):?/.test(line) || (line.startsWith('#EXT-X-KEY:') && !/^#EXT-X-KEY:METHOD=NONE(?:,|$)/.test(line))) {
       throw new Error('Unsupported recording format (encryption, maps, gaps or byte ranges)')
     }
     if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) sequence = Number(line.slice(22))
     else if (line.startsWith('#EXT-X-DISCONTINUITY-SEQUENCE:')) discontinuitySequence = Number(line.slice(30))
-    else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) date = Date.parse(line.slice(25))
+    else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) {
+      date = Date.parse(line.slice(25))
+      if (!Number.isFinite(date)) throw new Error('Recording playlist lacks a valid dated timeline')
+      explicitDate = true
+    }
     else if (line.startsWith('#EXTINF:')) duration = Number(line.slice(8).split(',')[0])
-    else if (line === '#EXT-X-DISCONTINUITY') discontinuity = true
+    else if (line === '#EXT-X-DISCONTINUITY') {
+      discontinuity = true
+      if (originDate !== undefined && !explicitDate) date = NaN
+    }
     else if (line && !line.startsWith('#')) {
+      if (originDate !== undefined && fullContinuous) {
+        if (!Number.isFinite(date)) date = expectedDate!
+        else if (Math.abs(date - expectedDate!) > 250) throw new Error('Archive rendition timeline does not match its origin')
+      }
       if (!Number.isSafeInteger(sequence) || sequence < 0 || !Number.isFinite(date) || !Number.isFinite(duration) || duration <= 0) throw new Error('Recording playlist lacks a valid dated timeline')
       const segmentUrl = new URL(line, url)
       if (!['https:', 'http:'].includes(segmentUrl.protocol)) throw new Error('Unsupported segment protocol')
       segments.push({ sequence: sequence++, duration, date, url: segmentUrl.href, discontinuity, offset: 0, bytes: 0 })
       date += duration * 1000
+      if (expectedDate !== undefined) expectedDate += duration * 1000
       duration = 0
       discontinuity = false
+      explicitDate = false
     }
   }
   if (!Number.isSafeInteger(discontinuitySequence) || discontinuitySequence < 0) throw new Error('Invalid discontinuity sequence')
@@ -87,6 +104,8 @@ export class TemporaryDvr {
   private rendition = ''
   private mediaUrl = ''
   private disposed = false
+  private archiveOrigin: number | undefined
+  private goal = Infinity
 
   constructor(root: string, options: Options = {}) {
     const absolute = resolve(root)
@@ -140,7 +159,7 @@ export class TemporaryDvr {
     })
   }
 
-  start(masterPlaylist: string, rendition: string, programDateTime: number): Promise<DvrStartResult> {
+  start(masterPlaylist: string, rendition: string, programDateTime: number, archive?: { originDate: number }): Promise<DvrStartResult> {
     const generation = ++this.generation
     this.controller?.abort()
     return this.enqueue(async () => {
@@ -148,6 +167,8 @@ export class TemporaryDvr {
       if (generation !== this.generation || this.disposed) throw new Error('Recording cancelled')
       if (!this.server) throw new Error('Recorder must be initialized')
       if (!Number.isFinite(programDateTime)) throw new Error('Invalid paused timestamp')
+      if (archive && !Number.isFinite(archive.originDate)) throw new Error('Invalid archive timeline origin')
+      this.archiveOrigin = archive?.originDate
       this.controller = new AbortController()
       this.rendition = rendition
       const selected = variant(masterPlaylist, rendition)
@@ -157,29 +178,49 @@ export class TemporaryDvr {
       await mkdir(this.directory)
       this.recording = true
       let result: DvrStartResult | null = null
+      const deadline = Date.now() + (this.options.initialWaitMs ?? 30000)
+      const initialController = this.controller
+      // Include slow playlist responses and URL renewal in the publication
+      // deadline; counting only the sleeps could otherwise wait much longer.
+      const initialTimer = archive ? setTimeout(() => initialController.abort(new Error('Paused frame is not yet available in the published archive')), this.options.initialWaitMs ?? 30000) : undefined
       try {
-        const playlist = await this.loadPlaylist()
-        const paused = playlist.segments.findIndex(s => s.date <= programDateTime && s.date + s.duration * 1000 > programDateTime)
-        if (paused < 0) throw new Error('Paused frame is no longer available in the live playlist')
+        let playlist = await this.loadPlaylist()
+        const findPaused = (): number => playlist.segments.findIndex(s => s.date <= programDateTime && s.date + s.duration * 1000 > programDateTime)
+        let paused = findPaused()
+        while (archive && paused < 0 && !playlist.ended && Date.now() < deadline) {
+          const last = playlist.segments.at(-1)
+          if ((last && programDateTime < last.date + last.duration * 1000) || programDateTime < archive.originDate) break
+          await delay(Math.min(this.options.pollMs ?? 1500, Math.max(1, deadline - Date.now())), undefined, { signal: this.controller.signal })
+          playlist = await this.loadPlaylist()
+          paused = findPaused()
+        }
+        clearTimeout(initialTimer)
+        if (paused < 0) throw new Error('Paused frame is no longer available in the published archive playlist')
         // Start with the paused segment: fetching older history wastes bandwidth and
         // can fail on expired files even though the required paused frame is saved.
         const startAt = (programDateTime - playlist.segments[paused].date) / 1000
+        this.position = startAt
+        this.goal = archive ? startAt + 300 : Infinity
         this.discontinuitySequence = playlist.discontinuitySequence + playlist.segments.slice(0, paused).filter(segment => segment.discontinuity).length
         playlist.segments = playlist.segments.slice(paused)
         result = { masterPlaylist: `#EXTM3U\n${selected.metadata}\n${this.serverOrigin}/${this.token}/index.m3u8\n`, startAt }
         await this.save(playlist)
         this.checkAbort()
         if (!this.segments.length) throw new Error('No playable recording data')
-        if (playlist.ended) this.recording = false
+        if (playlist.ended && this.lastSequence === playlist.segments.at(-1)?.sequence) this.recording = false
         if (this.recording) this.worker = this.poll()
         return result
       } catch (error) {
+        clearTimeout(initialTimer)
+        // timers/promises wraps an abort reason; retain the useful publication
+        // deadline error while preserving ordinary user cancellation.
+        const failure = initialController.signal.aborted ? initialController.signal.reason : error
         this.recording = false
-        this.problem = error instanceof Error ? error.message : String(error)
+        this.problem = failure instanceof Error ? failure.message : String(failure)
         // A later initial download can fail after the paused frame is safely
         // published. Keep that playable recording accessible to the renderer.
         if (result && this.segments.length && !this.controller.signal.aborted && generation === this.generation) return result
-        throw error
+        throw failure
       }
     })
   }
@@ -214,7 +255,7 @@ export class TemporaryDvr {
       return this.loadPlaylist(false)
     }
     if (!response.ok) { await response.body?.cancel(); throw new Error(`Recording playlist HTTP ${response.status}`) }
-    return parseMedia(await response.text(), this.mediaUrl)
+    return parseMedia(await response.text(), this.mediaUrl, this.archiveOrigin)
   }
 
   private async download(segment: Segment): Promise<void> {
@@ -302,6 +343,7 @@ export class TemporaryDvr {
     const pending = playlist.segments.filter(s => this.lastSequence === null || s.sequence > this.lastSequence)
     if (this.lastSequence !== null && pending.length && pending[0].sequence !== this.lastSequence + 1) throw new Error('Missing sequence in recording; recording stopped before the gap')
     for (const segment of pending) {
+      if (this.elapsed >= this.goal) break
       if (this.lastSequence !== null && segment.sequence !== this.lastSequence + 1) throw new Error('Missing sequence in recording')
       const previous = this.segments.at(-1)
       if (previous && !segment.discontinuity && Math.abs(segment.date - previous.date - previous.duration * 1000) > 250) throw new Error('Missing interval in recording timeline')
@@ -330,10 +372,14 @@ export class TemporaryDvr {
     while (this.recording) {
       try {
         await delay(this.options.pollMs ?? 1500, undefined, { signal: this.controller!.signal })
+        // A full archive batch needs no upstream traffic, even if the source is
+        // still growing. Playback progress opens the next five-minute goal.
+        if (this.archiveOrigin !== undefined && this.elapsed >= this.goal && this.elapsed - this.position <= 60) this.goal = this.elapsed + 300
+        if (this.elapsed >= this.goal) continue
         const playlist = await this.loadPlaylist()
         await this.save(playlist)
         failures = 0
-        if (playlist.ended) this.recording = false
+        if (playlist.ended && this.lastSequence === playlist.segments.at(-1)?.sequence) this.recording = false
       } catch (error) {
         if (this.controller?.signal.aborted) return
         const message = error instanceof Error ? error.message : String(error)
@@ -348,6 +394,7 @@ export class TemporaryDvr {
   updatePosition(mediaSeconds: number): void {
     // HLS media time retains its initial origin while this player stays attached.
     if (Number.isFinite(mediaSeconds) && mediaSeconds >= 0) this.position = Math.min(mediaSeconds, this.elapsed)
+    if (this.archiveOrigin !== undefined && this.recording && this.elapsed >= this.goal && this.elapsed - this.position <= 60) this.goal = this.elapsed + 300
   }
 
   private playlist(): string {
@@ -374,6 +421,8 @@ export class TemporaryDvr {
     this.targetDuration = 1
     this.lastSequence = null
     this.discontinuitySequence = 0
+    this.archiveOrigin = undefined
+    this.goal = Infinity
   }
 
   stop(): Promise<void> {

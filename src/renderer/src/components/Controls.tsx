@@ -99,7 +99,7 @@ export function Controls(props: Props): React.JSX.Element {
         storyboard={props.storyboard}
         onSeek={props.onSeekTo}
         onJumpLive={props.onJumpLive}
-        recording={!!props.recording && props.recording.kind !== 'idle'}
+        recording={fixed || props.recording?.kind === 'preparing'}
       />
 
 
@@ -121,8 +121,8 @@ export function Controls(props: Props): React.JSX.Element {
       <FullscreenButton target={props.fullscreenTarget} />
 
       {props.recording && props.recording.kind !== 'idle' && (
-        <span role="status" title="Saved temporarily on this device and deleted when you stop or close Slipstream. Jump Live restores quality choices." style={{ fontSize: 11, maxWidth: 240 }}>
-          {props.recording.error || (props.recording.kind === 'preparing' ? 'Preparing temporary recording…' : 'Temporary recording')}
+        <span role="status" title={props.recording.kind === 'unavailable' ? 'This live broadcast has no accessible VOD for a temporary buffer.' : 'Saved temporarily on this device and deleted when you stop or close Slipstream. Jump Live restores quality choices.'} style={{ fontSize: 11, maxWidth: 240 }}>
+          {props.recording.error || (props.recording.kind === 'unavailable' ? 'Live only · No VOD' : props.recording.kind === 'preparing' ? 'Preparing temporary buffer…' : 'Temporary buffer')}
         </span>
       )}
 

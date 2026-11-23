@@ -92,7 +92,7 @@ export interface DvrStatus {
 }
 
 export interface DvrApi {
-  start: (rendition: string, programDateTime: number) => Promise<DvrStartResult>
+  start: (rendition: string, programDateTime: number) => Promise<DvrStartResult | null>
   status: () => Promise<DvrStatus>
   position: (mediaSeconds: number) => Promise<void>
   stop: () => Promise<void>

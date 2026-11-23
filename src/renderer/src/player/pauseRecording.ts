@@ -1,11 +1,11 @@
 export interface PauseSnapshot { rendition: string; programDateTime: number }
 interface StartResult { masterPlaylist: string; startAt: number }
 interface RecordingApi {
-  start(rendition: string, programDateTime: number): Promise<StartResult>
+  start(rendition: string, programDateTime: number): Promise<StartResult | null>
   stop(): Promise<void>
 }
 export interface RecordingState {
-  kind: 'idle' | 'preparing' | 'recording' | 'failed'
+  kind: 'idle' | 'preparing' | 'recording' | 'unavailable' | 'failed'
   error: string | null
   resumeRequested?: boolean
 }
@@ -46,6 +46,11 @@ export class PauseRecording {
         if (generation !== this.generation) return
         const result = await this.api.start(snapshot.rendition, snapshot.programDateTime)
         if (generation !== this.generation) return
+        if (result === null) {
+          this.change('unavailable')
+          this.hooks.restore(this.wantsPlay)
+          return
+        }
         this.change('recording')
         this.hooks.load(result, this.wantsPlay)
       } catch (error) {
@@ -79,7 +84,7 @@ export class PauseRecording {
   }
 
   cancel(): Promise<void> {
-    const needed = this.state.kind !== 'idle'
+    const needed = this.state.kind !== 'idle' && this.state.kind !== 'unavailable'
     ++this.generation
     this.wantsPlay = false
     this.change('idle')
