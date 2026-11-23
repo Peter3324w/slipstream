@@ -20,6 +20,7 @@ import { VodChat, type VodChatState } from './chat/vodChat'
 import { EmoteTraffic } from './chat/emotes'
 import { ChatPane } from './components/ChatPane'
 import { Controls } from './components/Controls'
+import { StopConfirmation } from './components/StopConfirmation'
 import { MemoryHud } from './components/MemoryHud'
 import { ChatMenu } from './components/ChatMenu'
 import { Favourites } from './components/Favourites'
@@ -160,6 +161,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
   /** Mirrors loginRef for rendering; a ref alone would not trigger an update. */
   const [channel, setChannel] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [stopRequested, setStopRequested] = useState(false)
   const [levels, setLevels] = useState<QualityLevel[]>([])
   /** What hls.js is actually playing. Under ABR this moves on its own. */
   const [activeLevel, setActiveLevel] = useState(-1)
@@ -341,6 +343,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
       return
     }
 
+    setStopRequested(false)
     liveArmedRef.current = false
     liveMasterRef.current = null
     void recordingRef.current?.cancel()
@@ -515,6 +518,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
    * let go, so nothing is downloading until you pick another channel.
    */
   const stop = useCallback((): void => {
+    setStopRequested(false)
     liveArmedRef.current = false
     liveMasterRef.current = null
     void recordingRef.current?.cancel()
@@ -541,6 +545,10 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     syncRef.current?.reset()
     if (listRef.current) listRef.current.emotes = null
   }, [])
+
+  const requestStop = useCallback((): void => {
+    if (phase.kind !== 'idle') setStopRequested(true)
+  }, [phase.kind])
 
   /** Re-run the token dance and swap the manifest without disturbing chat. */
   const refresh = useCallback(async (): Promise<void> => {
@@ -886,6 +894,8 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // Let the modal's focused buttons and Escape handle keys normally.
+      if (stopRequested) return
       const target = e.target as HTMLElement | null
       // Only bail for real text entry. Bailing for every input meant that once
       // you touched the volume slider, every shortcut silently stopped working.
@@ -925,7 +935,8 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
           })
           break
         case 'x':
-          stop()
+          e.preventDefault()
+          if (!e.repeat) requestStop()
           break
         case 'f2':
           setHudVisible((v) => !v)
@@ -937,7 +948,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [seek, togglePlay, toggleChat, stop, zoom.reset, jumpLive])
+  }, [seek, togglePlay, toggleChat, requestStop, stopRequested, zoom.reset, jumpLive])
 
   // --------------------------------------------------------------- view
 
@@ -1016,7 +1027,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
         onAdd={(login) => void mutateFavourites(window.slipstream.favourites.add, login)}
       />
 
-      <main className={`stage glass-frame${fullscreenControlsHidden ? ' controls-hidden' : ''}`} ref={stageRef}>
+      <main className={`stage glass-frame${fullscreenControlsHidden && !stopRequested ? ' controls-hidden' : ''}`} ref={stageRef}>
         {profileLogin && <div className="channel-profile-scroll"><ChannelProfile key={profileLogin} login={profileLogin}
           favourites={favourites} onFavouritesChange={updateProfileFavourites}
           onWatchLive={() => void start(profileLogin)} onPickVod={(id) => void start(`videos/${id}`)} /></div>}
@@ -1070,7 +1081,7 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
           storyboard={phase.kind === 'playing' ? phase.stream.video?.storyboard : null}
           playing={recording.kind === 'preparing' ? !!recording.resumeRequested : playing}
           onPlayPause={togglePlay}
-          onStop={stop}
+          onStop={requestStop}
           canStop={phase.kind !== 'idle'}
           onSeek={seek}
           dvr={dvr}
@@ -1099,6 +1110,12 @@ export default function App({ initialWatch, onHome }: AppProps = {}): React.JSX.
               if (match) playerRef.current?.setLevel(match.index)
             }
           }}
+        />
+        <StopConfirmation
+          open={stopRequested}
+          hasBuffer={recording.kind === 'preparing' || recording.kind === 'recording'}
+          onCancel={() => setStopRequested(false)}
+          onConfirm={stop}
         />
       </main>
 

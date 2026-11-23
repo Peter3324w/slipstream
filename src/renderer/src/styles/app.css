@@ -1378,3 +1378,29 @@ input { font: inherit; color: inherit; }
 }
 .stage:fullscreen.controls-hidden,
 .stage:fullscreen.controls-hidden * { cursor: none !important; }
+
+/* Stop is deliberate; the safe action gets initial focus and generous touch targets. */
+.stop-confirmation {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-app-region: no-drag;
+}
+.stop-confirmation::backdrop { background: rgb(0 0 0 / 0.65); }
+.stop-confirmation h2 { margin: 0 0 10px; font-size: 18px; line-height: 1.35; font-weight: 650; }
+.stop-confirmation p { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.stop-confirmation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stop-confirmation .btn { height: auto; min-height: 44px; padding: 10px 12px; font-weight: 600; }
+.stop-confirmation .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.stop-confirmation .stop-confirmation-stop { color: var(--danger); border-color: rgb(var(--danger-rgb) / 0.4); }
+.stop-confirmation .stop-confirmation-stop:hover { background: rgb(var(--danger-rgb) / 0.12); color: var(--danger); }
+@media (max-width: 420px) {
+  .stop-confirmation-actions { grid-template-columns: 1fr; gap: 10px; }
+}

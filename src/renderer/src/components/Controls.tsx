@@ -11,7 +11,7 @@ interface Props {
   ready: boolean
   playing: boolean
   onPlayPause: () => void
-  /** Ends the stream and its chat without closing the app. */
+  /** Requests confirmation before ending video and chat. */
   onStop: () => void
   /** Something is loaded or loading, so there is something to stop. */
   canStop: boolean
@@ -73,7 +73,8 @@ export function Controls(props: Props): React.JSX.Element {
         className="ctl ctl-stop"
         onClick={props.onStop}
         disabled={!props.canStop}
-        title="Stop stream - ends video and chat  (X)"
+        aria-label="Stop watching"
+        title="Stop watching…  (X)"
       >
         <Stop />
       </button>
