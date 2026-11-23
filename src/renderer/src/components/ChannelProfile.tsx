@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ChannelSummary } from '@shared/types'
 import { VodList } from './VodList'
+import { Heart, Play } from './Icons'
 
 interface Props {
   login: string
@@ -54,9 +55,13 @@ export function ChannelProfile({ login, onWatchLive, onPickVod, favourites, onFa
         <p>{loading ? 'Loading channel…' : profile?.exists === false ? 'Channel not found' : profile?.exists !== true ? 'Could not load channel details' : profile.live ? 'Live now' : 'Offline'}</p>
       </div>
       {profile?.exists === true && <div className="channel-profile-actions">
-        {profile.live && <button className="btn channel-watch-live" onClick={onWatchLive}>Watch live</button>}
+        {profile.live && <button className="btn channel-watch-live" onClick={onWatchLive}>
+          <span className="channel-action-icon" aria-hidden="true"><Play /></span>
+          Watch live
+        </button>}
         <button className="btn channel-favourite" aria-pressed={favourite} disabled={saving}
           title={favourite ? 'Remove from favourites' : 'Add to favourites'} onClick={() => void toggleFavourite()}>
+          <span className="channel-action-icon" aria-hidden="true"><Heart filled={favourite} /></span>
           {saving ? 'Saving…' : favourite ? 'Added to favourites' : 'Add to favourites'}
         </button>
       </div>}

@@ -33,6 +33,12 @@ export const Play = ({ size = 16 }: P): React.JSX.Element => (
   </svg>
 )
 
+export const Heart = ({ size = 16, filled = false }: P & { filled?: boolean }): React.JSX.Element => (
+  <svg {...base(size)} fill={filled ? 'currentColor' : 'none'}>
+    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z" />
+  </svg>
+)
+
 export const Pause = ({ size = 16 }: P): React.JSX.Element => (
   <svg {...base(size)} fill="currentColor" stroke="none">
     <rect x="6.5" y="4.5" width="4" height="15" rx="1.2" />
